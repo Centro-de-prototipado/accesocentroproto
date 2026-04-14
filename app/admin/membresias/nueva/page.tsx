@@ -20,9 +20,8 @@ export default function NuevaMembresia() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Selecciona acá el ID de tu dispositivo, asumiendo lo puedes obtener dinamicamente
-  // o lo pones como una constante si solo hay un torniquete
-  const DEVICE_ID = "esp32c6_torniquete"; 
+  // Tu ID de dispositivo real
+  const DEVICE_ID = "esp32c6_gimnasio_01"; 
 
   useEffect(() => {
     // Check auth
@@ -70,19 +69,33 @@ export default function NuevaMembresia() {
     setError("");
     setHuellaId(null);
     setIsSensorActive(true);
-    setEnrollStatus("Despertando sensor...");
+    setEnrollStatus("Obteniendo ID disponible...");
+
     try {
+      // 1. Obtener el siguiente ID disponible (recirculado o nuevo)
+      const idRes = await fetch(`${API_URL}/api/next-huella-id`);
+      const idData = await idRes.json();
+      const nextId = idData.huella_id;
+
+      if (!nextId) throw new Error("No se pudo obtener un ID de huella válido.");
+
+      setEnrollStatus("Despertando sensor...");
+
+      // 2. Iniciar enrolamiento en el sensor con ese ID
       const res = await fetch(`${API_URL}/api/devices/${DEVICE_ID}/enroll`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ huella_id: nextId })
       });
+      
       const data = await res.json();
       if (!data.success) {
         setError(data.error || "No se pudo activar el sensor");
         setIsSensorActive(false);
         setEnrollStatus("Inactivo");
       }
-    } catch (err) {
-      setError("Error conectando con el servidor");
+    } catch (err: any) {
+      setError(err.message || "Error conectando con el servidor");
       setIsSensorActive(false);
       setEnrollStatus("Inactivo");
     }
