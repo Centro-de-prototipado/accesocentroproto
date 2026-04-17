@@ -13,6 +13,7 @@ export default function NuevaMembresia() {
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
   const [basePlanDays, setBasePlanDays] = useState("30");
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [huellaId, setHuellaId] = useState<number | null>(null);
   const [isSensorActive, setIsSensorActive] = useState(false);
@@ -112,7 +113,7 @@ export default function NuevaMembresia() {
       const res = await fetch(`${API_URL}/api/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cedula, nombre, telefono, huella_id: huellaId, basePlanDays }),
+        body: JSON.stringify({ cedula, nombre, telefono, huella_id: huellaId, basePlanDays, startDate }),
       });
       const data = await res.json();
       
@@ -194,18 +195,18 @@ export default function NuevaMembresia() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Celular</label>
+              <label className="text-sm font-medium text-slate-300">Fecha de Inscripción</label>
               <div className="relative">
-                <Phone className="absolute left-3 top-3 h-5 w-5 text-slate-500" />
+                <Calendar className="absolute left-3 top-3 h-5 w-5 text-slate-500" />
                 <input
-                  type="tel"
-                  value={telefono}
-                  onChange={(e) => setTelefono(e.target.value)}
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
                   className="w-full pl-10 pr-3 py-3 border border-slate-700 bg-slate-950 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 transition-all outline-none"
-                  placeholder="300 000 0000"
                   required
                 />
               </div>
+              <p className="text-xs text-slate-500">Se contará 1 mes + 2 días de gracia a partir de esta fecha.</p>
             </div>
 
             <button
