@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Fingerprint, User, CreditCard, Phone, CheckCircle2, ChevronLeft, Loader2, Activity } from "lucide-react";
+import { Fingerprint, User, CreditCard, Phone, CheckCircle2, ChevronLeft, Loader2, Activity, Calendar } from "lucide-react";
 import io from "socket.io-client";
 import Link from "next/link";
 import { API_URL } from '@/lib/config';
