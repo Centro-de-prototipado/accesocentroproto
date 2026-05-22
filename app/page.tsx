@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Activity, ShieldCheck, ShieldAlert, Users, LayoutDashboard, BarChart3, Calendar, Download, Trash2, Mail, ExternalLink, X } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { Activity, ShieldCheck, ShieldAlert, Users, Flame, TrendingUp, Calendar, Download, X, Clock, Zap, Target, Sparkles, Smartphone, Cloud, Trash2, RefreshCw } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useRouter } from 'next/navigation';
 import { API_URL } from '@/lib/config';
 
@@ -18,290 +18,681 @@ type AccessEvent = {
 
 type WeeklyData = { day: string; date: string; count: number };
 
+function AnimatedCounter({ value, label, suffix = '' }: { value: number; label: string; suffix?: string }) {
+  const [display, setDisplay] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let start = 0;
+    const duration = 1500;
+    const step = Math.ceil(value / (duration / 16));
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= value) {
+        setDisplay(value);
+        clearInterval(timer);
+      } else {
+        setDisplay(start);
+      }
+    }, 16);
+    return () => clearInterval(timer);
+  }, [value]);
+
+  return (
+    <div ref={ref} className="text-center">
+      <div className="text-3xl md:text-4xl font-black tracking-tight">
+        <span className="text-gradient">{display.toLocaleString()}{suffix}</span>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1 font-medium uppercase tracking-wider">{label}</p>
+    </div>
+  );
+}
+
+function StatCard({ title, value, icon: Icon, gradient, delay, onClick }: {
+  title: string; value: number; icon: any; gradient: string; delay: string; onClick?: () => void;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={`group relative glass rounded-2xl p-6 cursor-pointer overflow-hidden animate-tnt-slide-up ${delay}`}
+    >
+      <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ${gradient}`} />
+      <div className="relative z-10">
+        <div className="flex items-start justify-between mb-4">
+          <div className="relative">
+            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          </div>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${gradient} shadow-lg`}>
+            <Icon className="w-5 h-5 text-white" />
+          </div>
+        </div>
+        <div className="flex items-baseline gap-1">
+          <span className="text-3xl md:text-4xl font-black tracking-tight text-white">{value}</span>
+        </div>
+        <div className="mt-3 h-1 rounded-full bg-white/5 overflow-hidden">
+          <div className={`h-full rounded-full ${gradient} transition-all duration-1000`} style={{ width: `${Math.min(value * 10, 100)}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EventCard({ ev, index }: { ev: AccessEvent; index: number }) {
+  const isPermitted = ev.resultado.includes('permitido');
+  const isGrace = ev.resultado.includes('gracia');
+  const isExpired = ev.resultado.includes('vencido');
+  const isMoroso = ev.resultado.includes('moroso');
+  const isDenied = !isPermitted && !isGrace && !isExpired && !isMoroso;
+
+  const getConfig = () => {
+    if (isDenied) return { color: 'from-red-500/20 to-red-600/5', border: 'border-red-500/20', icon: ShieldAlert, glow: 'shadow-red-500/10', bg: 'bg-red-500/10', text: 'text-red-400', badge: 'DENEGADO', badgeColor: 'bg-red-500/20 text-red-400' };
+    if (isExpired) return { color: 'from-orange-500/20 to-orange-600/5', border: 'border-orange-500/20', icon: ShieldAlert, glow: 'shadow-orange-500/10', bg: 'bg-orange-500/10', text: 'text-orange-400', badge: 'VENCIDO', badgeColor: 'bg-orange-500/20 text-orange-400' };
+    if (isMoroso) return { color: 'from-orange-500/20 to-orange-600/5', border: 'border-orange-500/20', icon: ShieldAlert, glow: 'shadow-orange-500/10', bg: 'bg-orange-500/10', text: 'text-orange-400', badge: 'MOROSO', badgeColor: 'bg-orange-500/20 text-orange-400' };
+    if (isGrace) return { color: 'from-yellow-500/20 to-yellow-600/5', border: 'border-yellow-500/20', icon: ShieldCheck, glow: 'shadow-yellow-500/10', bg: 'bg-yellow-500/10', text: 'text-yellow-400', badge: 'GRACIA', badgeColor: 'bg-yellow-500/20 text-yellow-400' };
+    return { color: 'from-green-500/20 to-green-600/5', border: 'border-green-500/20', icon: ShieldCheck, glow: 'shadow-green-500/10', bg: 'bg-green-500/10', text: 'text-green-400', badge: 'PERMITIDO', badgeColor: 'bg-green-500/20 text-green-400' };
+  };
+
+  const cfg = getConfig();
+  const IconComponent = cfg.icon;
+
+  return (
+    <div
+      className={`relative glass rounded-xl p-4 border ${cfg.border} animate-tnt-slide-left shadow-sm`}
+      style={{ animationDelay: `${index * 0.1}s` }}
+    >
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-r ${cfg.color} opacity-50" />
+      <div className="relative flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className={`w-10 h-10 rounded-xl ${cfg.bg} flex items-center justify-center ${cfg.text}`}>
+            <IconComponent className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="font-bold text-white flex items-center gap-2 text-sm">
+              {ev.miembro?.nombre || 'Huella Desconocida'}
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${cfg.badgeColor}`}>
+                {cfg.badge}
+              </span>
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              ID: {ev.miembro?.huella_id || '?'} · Confianza: {ev.confianza}%
+            </p>
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-sm font-semibold text-white">{new Date(ev.timestamp || Date.now()).toLocaleTimeString()}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">{new Date(ev.timestamp || Date.now()).toLocaleDateString()}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [events, setEvents] = useState<AccessEvent[]>([]);
-  const [stats, setStats] = useState({ active: 0, grace: 0, expired: 0, totalAccesses: 0, histogram: Array(24).fill(0), weekly: [] as WeeklyData[] });
-  
-  // Modal states
+  const [stats, setStats] = useState({ active: 0, inactive: 0, totalAccesses: 0, failedAccesses: 0, histogram: Array(24).fill(0), weekly: [] as WeeklyData[] });
   const [showCleanupModal, setShowCleanupModal] = useState(false);
-  const [email, setEmail] = useState("");
+  const [cleanupOption, setCleanupOption] = useState<string | null>(null);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [mounted, setMounted] = useState(false);
+  
+  // Admin Auth for Open Door
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminError, setAdminError] = useState("");
 
   useEffect(() => {
+    setMounted(true);
     localStorage.removeItem("adminToken");
 
     const socket = io(API_URL);
-    
     socket.on('access_event', (data: AccessEvent) => {
-      setEvents((prev) => [data, ...prev].slice(0, 10));
+      setEvents((prev) => [data, ...prev].slice(0, 15));
     });
 
     fetch(`${API_URL}/api/stats`)
-      .then(res => res.json())
-      .then(data => setStats(data))
+      .then(res => {
+        if (!res.ok) throw new Error("Error loading stats");
+        return res.json();
+      })
+      .then(data => setStats(prev => ({ ...prev, ...data })))
       .catch(err => console.error("Could not load stats.", err));
 
-    return () => { socket.disconnect(); };
+    const timeInterval = setInterval(() => setCurrentTime(new Date()), 1000);
+
+    return () => { socket.disconnect(); clearInterval(timeInterval); };
   }, []);
 
   useEffect(() => {
-    // Check for weekly cleanup
     const lastCleanup = localStorage.getItem('last_cleanup');
     const now = new Date();
-    if (!lastCleanup || (now.getTime() - new Date(lastCleanup).getTime() > 7 * 24 * 60 * 60 * 1000)) {
+    // 30 days cleanup
+    if (!lastCleanup || (now.getTime() - new Date(lastCleanup).getTime() > 30 * 24 * 60 * 60 * 1000)) {
       setShowCleanupModal(true);
     }
   }, []);
 
-  const handleCleanup = async () => {
-    if (!email) {
-      alert("Por favor ingresa un correo electrónico.");
-      return;
-    }
+  const handleCleanup = async (option: string) => {
     setIsCleaning(true);
     try {
       const res = await fetch(`${API_URL}/api/cleanup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ exportTo: option })
       });
       const data = await res.json();
       if (data.success) {
-        alert("Datos exportados y base de datos de accesos limpiada.");
+        if (option === 'download' && data.data) {
+          const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = data.filename || 'accesos_export.json';
+          a.click();
+          URL.revokeObjectURL(url);
+        }
         localStorage.setItem('last_cleanup', new Date().toISOString());
         setShowCleanupModal(false);
-        // Refresh stats
-        fetch(`${API_URL}/api/stats`).then(r => r.json()).then(d => setStats(d));
+        setCleanupOption(null);
+        fetch(`${API_URL}/api/stats`)
+          .then(r => r.json())
+          .then(d => setStats(prev => ({ ...prev, ...d })));
+      } else { alert("Error: " + data.error); }
+    } catch { alert("Error conectando con el servidor"); }
+    finally { setIsCleaning(false); }
+  };
+
+  const syncSensor = async () => {
+    setIsSyncing(true);
+    setSyncMessage("");
+    try {
+      const res = await fetch(`${API_URL}/api/sync-sensor`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setSyncMessage(data.message || "Comando de sincronización enviado");
       } else {
-        alert("Error: " + data.error);
+        setSyncMessage("Error al sincronizar sensor");
       }
-    } catch (e) {
-      alert("Error conectando con el servidor");
-    } finally {
-      setIsCleaning(false);
+    } catch {
+      setSyncMessage("Error de conexión");
+    }
+    setIsSyncing(false);
+    setTimeout(() => setSyncMessage(""), 5000);
+  };
+
+  const handleOpenDoorClick = () => {
+    setShowAdminModal(true);
+    setAdminUsername("");
+    setAdminPassword("");
+    setAdminError("");
+  };
+
+  const confirmOpenDoor = async () => {
+    if (!adminUsername || !adminPassword) {
+      setAdminError("Ingresa usuario y contraseña");
+      return;
+    }
+    
+    try {
+      const loginRes = await fetch(`${API_URL}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: adminUsername, password: adminPassword })
+      });
+      const loginData = await loginRes.json();
+      
+      if (!loginData.success) {
+        setAdminError("Credenciales inválidas");
+        return;
+      }
+      
+      setShowAdminModal(false);
+      
+      const openRes = await fetch(`${API_URL}/api/devices/esp32c6_gimnasio_01/open`, { method: 'POST' });
+      if(openRes.ok) {
+        alert("¡Puerta abierta!");
+      } else {
+        alert("Error al abrir puerta");
+      }
+    } catch(e: any) {
+      alert("Error: "+ e.message);
     }
   };
 
-  const openDoor = () => {
-    fetch(`${API_URL}/api/devices/esp32c6_gimnasio_01/open`, { method: 'POST' })
-      .then(() => alert("¡Puerta abierta!"))
-      .catch((e) => alert("Error: "+ e.message));
-  }
-
-  const histogramData = stats.histogram.map((count: number, hour: number) => ({
+  const histogramData = (stats.histogram || Array(24).fill(0)).map((count: number, hour: number) => ({
     hora: `${hour.toString().padStart(2, '0')}:00`,
     ingresos: count,
   }));
-  const maxHour = Math.max(...stats.histogram, 1);
+  const maxHour = Math.max(...(stats.histogram || [0]), 1);
 
-  const weeklyData = stats.weekly.map((d: WeeklyData) => ({
+  const weeklyData = (stats.weekly || []).map((d: WeeklyData) => ({
     label: `${d.day} ${d.date}`,
     ingresos: d.count,
   }));
-  const maxWeek = Math.max(...stats.weekly.map((d: WeeklyData) => d.count), 1);
+  const maxWeek = Math.max(...(stats.weekly || []).map((d: WeeklyData) => d.count), 1);
 
   return (
-    <div className="space-y-8 animate-in fade-in zoom-in duration-500">
-      
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-muted-foreground mt-1 text-sm">Métricas en tiempo real y monitoreo de accesos</p>
+    <div className="space-y-8">
+      {/* Hero Section */}
+      <div className="relative glass rounded-3xl p-8 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-red-600/10 via-red-800/5 to-black/20" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 w-48 h-48 bg-white/5 rounded-full blur-3xl" />
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="px-3 py-1 rounded-full bg-gradient-to-r from-red-600/20 to-red-800/20 border border-red-500/20 text-xs font-semibold text-red-400 flex items-center gap-1.5">
+                <Zap className="w-3 h-3" /> Tiempo Real
+              </div>
+              <div className="px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-xs font-semibold text-green-400 flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-tnt-status-pulse" />
+                Sistema Activo
+              </div>
+            </div>
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight">
+              <span className="text-gradient">TNT Gym</span>
+            </h1>
+            <p className="text-muted-foreground text-sm md:text-base max-w-xl">
+              Control de acceso biométrico inteligente · Monitoreo en tiempo real · Gestión de membresías
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-2xl font-black text-white">{mounted ? currentTime.toLocaleTimeString() : '--:--:--'}</p>
+              <p className="text-xs text-muted-foreground">{mounted ? currentTime.toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Cargando fecha...'}</p>
+            </div>
+            <button onClick={handleOpenDoorClick} className="group relative px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 overflow-hidden transition-all duration-300">
+              <div className="absolute inset-0 bg-gradient-to-r from-red-700 via-red-600 to-red-800 animate-tnt-gradient-shift" />
+              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <ShieldCheck className="relative z-10 w-4 h-4" />
+              <span className="relative z-10">Abrir Puerta</span>
+            </button>
+          </div>
         </div>
-        <button onClick={openDoor} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium shadow-lg transition-colors flex items-center gap-2">
-          <ShieldCheck size={18} /> Puerta Abierta Remota
-        </button>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {[{ title: "Accesos Hoy", val: stats.totalAccesses, icon: Activity, col: "text-blue-500", filter: "today" },
-          { title: "Miembros Activos", val: stats.active, icon: Users, col: "text-green-500", filter: "active" },
-          { title: "Vencidos", val: stats.expired, icon: ShieldAlert, col: "text-red-500", filter: "expired" }].map((stat, i) => (
-          <div 
-            key={i} 
-            onClick={() => router.push(`/users?filter=${stat.filter}`)}
-            className="bg-card border border-border p-6 rounded-xl flex items-center gap-4 shadow-sm relative overflow-hidden group cursor-pointer hover:border-primary/50 transition-all"
-          >
-            <div className={`p-4 rounded-full bg-muted group-hover:scale-110 transition-transform ${stat.col} bg-opacity-20`}>
-              <stat.icon size={24} className={stat.col} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-              <h3 className="text-3xl font-bold">{stat.val}</h3>
-            </div>
-            <ExternalLink size={14} className="absolute top-4 right-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-          </div>
-        ))}
+      {/* Live Stats Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="glass rounded-2xl p-5 animate-tnt-slide-up stagger-1">
+          <AnimatedCounter value={stats.totalAccesses} label="Accesos Hoy" />
+        </div>
+        <div className="glass rounded-2xl p-5 animate-tnt-slide-up stagger-2">
+          <AnimatedCounter value={stats.active} label="Activos" />
+        </div>
+        <div className="glass rounded-2xl p-5 animate-tnt-slide-up stagger-3">
+          <AnimatedCounter value={stats.failedAccesses} label="Fallidos Hoy" />
+        </div>
+        <div className="glass rounded-2xl p-5 animate-tnt-slide-up stagger-4">
+          <AnimatedCounter value={stats.inactive} label="Inactivos" />
+        </div>
       </div>
 
-      {/* Charts Row */}
+      {/* Stat Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          title="Accesos Hoy"
+          value={stats.totalAccesses}
+          icon={Activity}
+          gradient="bg-gradient-to-br from-blue-600/20 to-blue-700/10"
+          delay="stagger-1"
+          onClick={() => router.push('/users?filter=today')}
+        />
+        <StatCard
+          title="Miembros Activos"
+          value={stats.active}
+          icon={Users}
+          gradient="bg-gradient-to-br from-green-600/20 to-green-700/10"
+          delay="stagger-2"
+          onClick={() => router.push('/users?filter=active')}
+        />
+        <StatCard
+          title="Miembros Inactivos"
+          value={stats.inactive}
+          icon={Flame}
+          gradient="bg-gradient-to-br from-red-600/20 to-red-700/10"
+          delay="stagger-3"
+          onClick={() => router.push('/users?filter=inactive')}
+        />
+      </div>
+
+      {/* Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
-
-        {/* Hourly Histogram */}
-        <div className="bg-card border border-border rounded-xl shadow-sm">
-          <div className="px-6 py-5 border-b border-border flex items-center gap-3">
-            <BarChart3 size={20} className="text-blue-500" />
-            <h3 className="text-lg font-bold">Afluencia por Hora — Hoy</h3>
+        <div className="glass rounded-2xl overflow-hidden animate-tnt-slide-up stagger-3">
+          <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-white" />
+              </div>
+              <h3 className="text-sm font-bold text-white">Afluencia por Hora</h3>
+            </div>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Hoy</span>
           </div>
-          <div className="p-4" style={{ height: 280 }}>
+          <div className="p-4" style={{ height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={histogramData} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="hora" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} interval={2} />
                 <YAxis allowDecimals={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, color: 'hsl(var(--foreground))' }}
+                  contentStyle={{ backgroundColor: 'hsl(240 10% 8%)', border: '1px solid hsl(0 100% 50% / 0.2)', borderRadius: 12, color: '#fff' }}
                   labelFormatter={(label) => `Hora: ${label}`}
                   formatter={(value: number) => [`${value} ingresos`, 'Cantidad']}
                 />
-                <Bar 
-                  dataKey="ingresos" 
-                  radius={[4, 4, 0, 0]}
+                <defs>
+                  <linearGradient id="hourGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#FF003C" />
+                    <stop offset="100%" stopColor="#FF6B00" />
+                  </linearGradient>
+                </defs>
+                <Bar
+                  dataKey="ingresos"
+                  radius={[6, 6, 0, 0]}
+                  fill="url(#hourGradient)"
                   onClick={(data) => {
                     const hour = data.hora.split(':')[0];
                     router.push(`/users?filter=access_hour&hour=${hour}`);
                   }}
                   className="cursor-pointer"
-                >
-                  {histogramData.map((entry, index) => (
-                    <Cell key={index} fill={entry.ingresos === maxHour && entry.ingresos > 0 ? '#ef4444' : entry.ingresos > 0 ? '#3b82f6' : '#1e293b'} />
-                  ))}
-                </Bar>
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Weekly Histogram */}
-        <div className="bg-card border border-border rounded-xl shadow-sm">
-          <div className="px-6 py-5 border-b border-border flex items-center gap-3">
-            <Calendar size={20} className="text-red-500" />
-            <h3 className="text-lg font-bold">Afluencia Semanal — Últimos 7 días</h3>
+        <div className="glass rounded-2xl overflow-hidden animate-tnt-slide-up stagger-4">
+          <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-600 to-yellow-600 flex items-center justify-center">
+                <Calendar className="w-4 h-4 text-white" />
+              </div>
+              <h3 className="text-sm font-bold text-white">Afluencia Semanal</h3>
+            </div>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">7 días</span>
           </div>
-          <div className="p-4" style={{ height: 280 }}>
+          <div className="p-4" style={{ height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={weeklyData} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="label" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
                 <YAxis allowDecimals={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, color: 'hsl(var(--foreground))' }}
+                  contentStyle={{ backgroundColor: 'hsl(240 10% 8%)', border: '1px solid hsl(24 100% 50% / 0.2)', borderRadius: 12, color: '#fff' }}
                   formatter={(value: number) => [`${value} ingresos`, 'Cantidad']}
                 />
-                <Bar dataKey="ingresos" radius={[4, 4, 0, 0]}>
-                  {weeklyData.map((entry, index) => (
-                    <Cell key={index} fill={entry.ingresos === maxWeek && entry.ingresos > 0 ? '#ef4444' : entry.ingresos > 0 ? '#2563eb' : '#1e293b'} />
-                  ))}
-                </Bar>
+                <defs>
+                  <linearGradient id="weekGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#FF003C" />
+                    <stop offset="100%" stopColor="#CC002E" />
+                  </linearGradient>
+                </defs>
+                <Bar dataKey="ingresos" radius={[6, 6, 0, 0]} fill="url(#weekGradient)" />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      {/* Live Events */}
-      <div className="bg-card border border-border rounded-xl shadow-sm">
-        <div className="px-6 py-5 border-b border-border">
-          <h3 className="text-xl font-bold">Accesos en Tiempo Real 🔴</h3>
+      {/* Real-time Events + Quick Actions */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Live Events */}
+        <div className="lg:col-span-2 glass rounded-2xl overflow-hidden animate-tnt-slide-up stagger-5">
+          <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-700 to-red-900 flex items-center justify-center border border-white/10">
+                <Zap className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Eventos en Vivo</h3>
+                <p className="text-[10px] text-muted-foreground">Accesos en tiempo real desde el sensor biométrico</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-tnt-status-pulse" />
+              <span className="text-[10px] font-medium text-red-400 uppercase tracking-wider">LIVE</span>
+            </div>
+          </div>
+          <div className="p-4 max-h-[400px] overflow-y-auto space-y-3">
+            {events.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-red-500/10 to-orange-500/10 flex items-center justify-center">
+                  <Activity className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground text-sm font-medium">Esperando eventos del sensor...</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Coloca un dedo en el sensor biométrico para ver el registro aquí</p>
+              </div>
+            ) : (
+              events.map((ev, i) => <EventCard key={ev.id || i} ev={ev} index={i} />)
+            )}
+          </div>
         </div>
-        <div className="p-6">
-          {events.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Activity className="mx-auto mb-4 opacity-50" size={32} />
-              Esperando eventos del sensor biométrico...
-            </div>
-          ) : (
+
+        {/* Quick Actions */}
+        <div className="space-y-4 animate-tnt-slide-up stagger-6">
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-yellow-400" />
+              Acciones Rápidas
+            </h3>
             <div className="space-y-3">
-              {events.map((ev, i) => {
-                const getStyle = (res: string) => {
-                  if (res.includes('permitido_gracia')) return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
-                  if (res.includes('permitido')) return 'bg-green-500/10 text-green-500 border-green-500/20';
-                  if (res.includes('denegado_vencido')) return 'bg-orange-500/10 text-orange-500 border-orange-500/20';
-                  return 'bg-red-500/10 text-red-500 border-red-500/20';
-                };
-
-                const getLabel = (res: string) => {
-                  if (res === 'permitido') return 'ACCESO PERMITIDO';
-                  if (res === 'permitido_gracia') return 'PERMITIDO (GRACIA)';
-                  if (res === 'denegado_vencido') return 'MEMBRESÍA VENCIDA';
-                  return 'ACCESO DENEGADO';
-                };
-
-                return (
-                  <div key={ev.id || i} className={`p-4 rounded-lg flex items-center justify-between border shadow-sm animate-in slide-in-from-left duration-300 ${getStyle(ev.resultado)}`}>
-                    <div className="flex items-center gap-4">
-                      {ev.resultado.includes('permitido') ? <ShieldCheck size={20} /> : <ShieldAlert size={20} />}
-                      <div>
-                        <p className="font-bold flex items-center gap-2">
-                          {ev.miembro?.nombre || 'Huella Desconocida'}
-                          <span className="text-xs opacity-70">ID: {ev.miembro?.huella_id || '?'}</span>
-                        </p>
-                        <p className="text-xs opacity-80 mt-1 uppercase tracking-wider font-semibold">{getLabel(ev.resultado)}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">{new Date(ev.timestamp || Date.now()).toLocaleTimeString()}</p>
-                      <p className="text-xs opacity-70 mt-1">Confianza: {ev.confianza}</p>
-                    </div>
+              <button onClick={handleOpenDoorClick} className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300">
+                <div className="absolute inset-0 bg-gradient-to-r from-red-600/20 to-red-800/20 group-hover:from-red-600/30 group-hover:to-red-800/30 transition-all duration-300" />
+                <div className="relative flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-700 to-red-900 flex items-center justify-center shadow-lg shadow-red-500/20 border border-white/10">
+                    <ShieldCheck className="w-5 h-5 text-white" />
                   </div>
-                )
-              })}
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-white">Abrir Puerta</p>
+                    <p className="text-[10px] text-muted-foreground">Acceso remoto inmediato</p>
+                  </div>
+                </div>
+              </button>
+
+              <button onClick={() => router.push('/users')} className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-cyan-500/20 group-hover:from-blue-600/30 group-hover:to-cyan-500/30 transition-all duration-300" />
+                <div className="relative flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                    <Users className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-white">Gestionar Miembros</p>
+                    <p className="text-[10px] text-muted-foreground">Renovar o consultar</p>
+                  </div>
+                </div>
+              </button>
+
+              <button onClick={syncSensor} disabled={isSyncing} className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300">
+                <div className="absolute inset-0 bg-gradient-to-r from-red-600/20 to-red-800/20 group-hover:from-red-600/30 group-hover:to-red-800/30 transition-all duration-300" />
+                <div className="relative flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-700 to-red-900 flex items-center justify-center shadow-lg shadow-red-500/20 border border-white/10">
+                    <RefreshCw className={`w-5 h-5 text-white ${isSyncing ? 'animate-spin' : ''}`} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-white">Sincronizar Sensor</p>
+                    <p className="text-[10px] text-muted-foreground">Actualizar lista de miembros activos</p>
+                  </div>
+                </div>
+              </button>
+              {syncMessage && (
+                <div className="px-3 py-2 rounded-xl text-xs font-medium bg-white/5 border border-white/10 text-muted-foreground text-center">
+                  {syncMessage}
+                </div>
+              )}
+
+              <button onClick={() => router.push('/settings')} className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300">
+                <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-white/[0.02] group-hover:from-white/10 group-hover:to-white/5 transition-all duration-300" />
+                <div className="relative flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center shadow-lg border border-white/10">
+                    <Target className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-white">Configuración</p>
+                    <p className="text-[10px] text-muted-foreground">Ajustes del sistema</p>
+                  </div>
+                </div>
+              </button>
             </div>
-          )}
+          </div>
+
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-blue-400" />
+              Estado del Sistema
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Sensor Biométrico</span>
+                <span className="text-xs font-semibold text-green-400 flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-tnt-status-pulse" />
+                  Online
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Base de Datos</span>
+                <span className="text-xs font-semibold text-green-400 flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-tnt-status-pulse" />
+                  Conectada
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Servidor MQTT</span>
+                <span className="text-xs font-semibold text-green-400 flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-tnt-status-pulse" />
+                  Activo
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      {/* Weekly Cleanup Modal */}
+
+      {/* Quincenal Cleanup Modal */}
       {showCleanupModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-card border border-border w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="p-6 border-b border-border flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="glass w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <Download className="text-blue-500" size={20} />
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-700 to-red-900 flex items-center justify-center shadow-lg shadow-red-500/20 border border-white/10">
+                  <Download className="w-5 h-5 text-white" />
                 </div>
-                <h3 className="text-xl font-bold">Mantenimiento Semanal</h3>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Mantenimiento Mensual</h3>
+                  <p className="text-[10px] text-muted-foreground">Limpieza de base de datos de accesos</p>
+                </div>
               </div>
-              <button onClick={() => setShowCleanupModal(false)} className="text-muted-foreground hover:text-foreground">
+              <button onClick={() => setShowCleanupModal(false)} className="text-muted-foreground hover:text-white transition-colors">
                 <X size={20} />
               </button>
             </div>
             <div className="p-6 space-y-4">
               <p className="text-sm text-muted-foreground">
-                Ha pasado una semana desde la última limpieza. ¿Deseas descargar los registros de acceso y liberar espacio en la base de datos?
+                Han pasado 30 días desde la última limpieza. Los registros de acceso serán eliminados de la base de datos. ¿Deseas guardar una copia antes?
               </p>
-              
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                  <Mail size={12} /> Correo de destino
-                </label>
-                <input 
-                  type="email" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ejemplo@correo.com"
-                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                />
+
+              <div className="space-y-3 pt-2">
+                <button
+                  onClick={() => handleCleanup('drive')}
+                  disabled={isCleaning}
+                  className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300 bg-white/[0.02] border border-white/5 hover:border-red-500/20 hover:bg-red-500/5"
+                >
+                  <div className="relative flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-700 to-red-900 flex items-center justify-center shadow-lg shadow-red-500/10 border border-white/10">
+                      <Cloud className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-white">Guardar en Google Drive</p>
+                      <p className="text-[10px] text-muted-foreground">Exportar y subir a la nube</p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleCleanup('download')}
+                  disabled={isCleaning}
+                  className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300 bg-white/[0.02] border border-white/5 hover:border-red-500/20 hover:bg-red-500/5"
+                >
+                  <div className="relative flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-700 to-red-900 flex items-center justify-center shadow-lg shadow-red-500/10 border border-white/10">
+                      <Smartphone className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-white">Descargar a PC / Celular</p>
+                      <p className="text-[10px] text-muted-foreground">Descargar archivo JSON</p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleCleanup('delete')}
+                  disabled={isCleaning}
+                  className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300 bg-white/[0.02] border border-white/5 hover:border-red-500/20 hover:bg-red-500/5"
+                >
+                  <div className="relative flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-lg shadow-red-500/10 border border-white/10">
+                      <Trash2 className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-white">Solo limpiar (sin guardar)</p>
+                      <p className="text-[10px] text-muted-foreground">Eliminar registros sin respaldo</p>
+                    </div>
+                  </div>
+                </button>
               </div>
 
-              <div className="flex flex-col gap-2 pt-2">
-                <button 
-                  onClick={handleCleanup}
-                  disabled={isCleaning}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                >
-                  {isCleaning ? "Procesando..." : "Descargar y Limpiar Base de Datos"}
-                </button>
-                <button 
+              {isCleaning && (
+                <div className="text-center py-2">
+                  <div className="w-5 h-5 mx-auto animate-spin rounded-full border-2 border-red-500 border-t-transparent" />
+                  <p className="text-xs text-muted-foreground mt-2">Procesando...</p>
+                </div>
+              )}
+
+              <div className="pt-2">
+                <button
                   onClick={() => {
                     localStorage.setItem('last_cleanup', new Date().toISOString());
                     setShowCleanupModal(false);
                   }}
-                  className="w-full py-3 text-sm text-muted-foreground hover:text-foreground transition-all"
+                  className="w-full py-2 text-sm text-muted-foreground hover:text-white transition-all"
                 >
-                  Omitir por ahora
+                  Recordármelo después
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Auth Modal para Abrir Puerta */}
+      {showAdminModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="glass w-full max-w-sm rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <ShieldCheck className="text-blue-400" size={22} /> Seguridad
+              </h3>
+              <button onClick={() => setShowAdminModal(false)} className="text-muted-foreground hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Ingresa tus credenciales para autorizar la apertura remota de la puerta.
+            </p>
+            <div className="space-y-4">
+              <input type="text" value={adminUsername} onChange={(e) => setAdminUsername(e.target.value)} autoFocus
+                placeholder="Usuario"
+                className="w-full px-4 py-3 bg-background/50 border border-white/10 rounded-xl text-sm text-white placeholder-muted-foreground focus:ring-2 focus:ring-red-500 outline-none transition-all" />
+              <input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 bg-background/50 border border-white/10 rounded-xl text-lg tracking-widest text-white placeholder-muted-foreground focus:ring-2 focus:ring-red-500 outline-none transition-all"
+                onKeyDown={(e) => e.key === 'Enter' && confirmOpenDoor()} />
+              {adminError && <p className="text-xs text-red-400 font-medium">{adminError}</p>}
+              <button onClick={confirmOpenDoor}
+                className="w-full py-3 rounded-xl font-bold text-sm bg-gradient-to-r from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white shadow-lg shadow-red-500/20 transition-all flex items-center justify-center gap-2">
+                <ShieldCheck className="w-4 h-4" /> Autorizar Apertura
+              </button>
             </div>
           </div>
         </div>

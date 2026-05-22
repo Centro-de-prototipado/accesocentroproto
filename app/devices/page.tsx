@@ -1,8 +1,10 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
 export default function DevicesPage() {
-  return (
-    <div className="space-y-6">
-      <h2 className="text-3xl font-bold tracking-tight">Devices Management</h2>
-      <p className="text-muted-foreground">This section is currently under development.</p>
-    </div>
-  );
+  const router = useRouter();
+  useEffect(() => { router.push("/"); }, [router]);
+  return null;
 }
