@@ -42,7 +42,7 @@ function LogCard({ log, index }: { log: AccessLog; index: number }) {
     if (isPermitted) return { border: 'border-green-500/20', bg: 'bg-green-500/10', text: 'text-green-400', badge: 'PERMITIDO', badgeColor: 'bg-green-500/20 text-green-400', dot: 'bg-green-500' };
     if (isGrace) return { border: 'border-yellow-500/20', bg: 'bg-yellow-500/10', text: 'text-yellow-400', badge: 'GRACIA', badgeColor: 'bg-yellow-500/20 text-yellow-400', dot: 'bg-yellow-500' };
     if (isExpired) return { border: 'border-orange-500/20', bg: 'bg-orange-500/10', text: 'text-orange-400', badge: 'VENCIDO', badgeColor: 'bg-orange-500/20 text-orange-400', dot: 'bg-orange-500' };
-    if (isMoroso) return { border: 'border-orange-500/20', bg: 'bg-orange-500/10', text: 'text-orange-400', badge: 'MOROSO', badgeColor: 'bg-orange-500/20 text-orange-400', dot: 'bg-orange-500' };
+    if (isMoroso) return { border: 'border-orange-500/20', bg: 'bg-orange-500/10', text: 'text-orange-400', badge: 'RENOVAR MENSUALIDAD', badgeColor: 'bg-orange-500/20 text-orange-400', dot: 'bg-orange-500' };
     return { border: 'border-red-500/20', bg: 'bg-red-500/10', text: 'text-red-400', badge: 'DENEGADO', badgeColor: 'bg-red-500/20 text-red-400', dot: 'bg-red-500' };
   };
 
@@ -243,7 +243,7 @@ export default function LogsPage() {
                   <option value="permitido_gracia">Gracia</option>
                   <option value="denegado">Denegado</option>
                   <option value="denegado_vencido">Vencido</option>
-                  <option value="moroso">Moroso</option>
+                  <option value="moroso">Renovar Mensualidad</option>
                 </select>
               </div>
               <div>

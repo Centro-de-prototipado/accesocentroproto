@@ -87,7 +87,7 @@ function EventCard({ ev, index }: { ev: AccessEvent; index: number }) {
   const getConfig = () => {
     if (isDenied) return { color: 'from-red-500/20 to-red-600/5', border: 'border-red-500/20', icon: ShieldAlert, glow: 'shadow-red-500/10', bg: 'bg-red-500/10', text: 'text-red-400', badge: 'DENEGADO', badgeColor: 'bg-red-500/20 text-red-400' };
     if (isExpired) return { color: 'from-orange-500/20 to-orange-600/5', border: 'border-orange-500/20', icon: ShieldAlert, glow: 'shadow-orange-500/10', bg: 'bg-orange-500/10', text: 'text-orange-400', badge: 'VENCIDO', badgeColor: 'bg-orange-500/20 text-orange-400' };
-    if (isMoroso) return { color: 'from-orange-500/20 to-orange-600/5', border: 'border-orange-500/20', icon: ShieldAlert, glow: 'shadow-orange-500/10', bg: 'bg-orange-500/10', text: 'text-orange-400', badge: 'MOROSO', badgeColor: 'bg-orange-500/20 text-orange-400' };
+    if (isMoroso) return { color: 'from-orange-500/20 to-orange-600/5', border: 'border-orange-500/20', icon: ShieldAlert, glow: 'shadow-orange-500/10', bg: 'bg-orange-500/10', text: 'text-orange-400', badge: 'RENOVAR MENSUALIDAD', badgeColor: 'bg-orange-500/20 text-orange-400' };
     if (isGrace) return { color: 'from-yellow-500/20 to-yellow-600/5', border: 'border-yellow-500/20', icon: ShieldCheck, glow: 'shadow-yellow-500/10', bg: 'bg-yellow-500/10', text: 'text-yellow-400', badge: 'GRACIA', badgeColor: 'bg-yellow-500/20 text-yellow-400' };
     return { color: 'from-green-500/20 to-green-600/5', border: 'border-green-500/20', icon: ShieldCheck, glow: 'shadow-green-500/10', bg: 'bg-green-500/10', text: 'text-green-400', badge: 'PERMITIDO', badgeColor: 'bg-green-500/20 text-green-400' };
   };
@@ -132,10 +132,14 @@ export default function Dashboard() {
   const [events, setEvents] = useState<AccessEvent[]>([]);
   const [stats, setStats] = useState({ active: 0, inactive: 0, totalAccesses: 0, failedAccesses: 0, histogram: Array(24).fill(0), weekly: [] as WeeklyData[] });
   const [showCleanupModal, setShowCleanupModal] = useState(false);
+  const [isForcedCleanup, setIsForcedCleanup] = useState(false);
   const [cleanupOption, setCleanupOption] = useState<string | null>(null);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [isPostponing, setIsPostponing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  const [isCleaningExpired, setIsCleaningExpired] = useState(false);
+  const [expiredMessage, setExpiredMessage] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mounted, setMounted] = useState(false);
   
@@ -153,6 +157,9 @@ export default function Dashboard() {
     socket.on('access_event', (data: AccessEvent) => {
       setEvents((prev) => [data, ...prev].slice(0, 15));
     });
+    socket.on('members_auto_deleted', () => {
+      fetch(`${API_URL}/api/stats`).then(r => r.json()).then(d => setStats(prev => ({ ...prev, ...d })));
+    });
 
     fetch(`${API_URL}/api/stats`)
       .then(res => {
@@ -168,12 +175,18 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    const lastCleanup = localStorage.getItem('last_cleanup');
-    const now = new Date();
-    // 30 days cleanup
-    if (!lastCleanup || (now.getTime() - new Date(lastCleanup).getTime() > 30 * 24 * 60 * 60 * 1000)) {
-      setShowCleanupModal(true);
-    }
+    fetch(`${API_URL}/api/cleanup/status`)
+      .then(res => {
+        if (!res.ok) throw new Error("Error loading cleanup status");
+        return res.json();
+      })
+      .then(data => {
+        if (data.needsCleanup) {
+          setIsForcedCleanup(true);
+          setShowCleanupModal(true);
+        }
+      })
+      .catch(err => console.error("Could not check cleanup status", err));
   }, []);
 
   const handleCleanup = async (option: string) => {
@@ -191,7 +204,7 @@ export default function Dashboard() {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = data.filename || 'accesos_export.json';
+          a.download = data.filename || 'limpieza_gym_export.json';
           a.click();
           URL.revokeObjectURL(url);
         }
@@ -204,6 +217,37 @@ export default function Dashboard() {
       } else { alert("Error: " + data.error); }
     } catch { alert("Error conectando con el servidor"); }
     finally { setIsCleaning(false); }
+  };
+
+  const handlePostpone = async () => {
+    setIsPostponing(true);
+    try {
+      await fetch(`${API_URL}/api/cleanup/postpone`, { method: 'POST' });
+      setShowCleanupModal(false);
+      setIsForcedCleanup(false);
+    } catch {
+      alert("Error al posponer");
+    }
+    finally { setIsPostponing(false); }
+  };
+
+  const cleanupExpired = async () => {
+    setIsCleaningExpired(true);
+    setExpiredMessage("");
+    try {
+      const res = await fetch(`${API_URL}/api/cleanup-expired-members`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setExpiredMessage(data.message);
+        fetch(`${API_URL}/api/stats`).then(r => r.json()).then(d => setStats(prev => ({ ...prev, ...d })));
+      } else {
+        setExpiredMessage("Error: " + (data.error || "No se pudo completar"));
+      }
+    } catch {
+      setExpiredMessage("Error de conexión");
+    }
+    setIsCleaningExpired(false);
+    setTimeout(() => setExpiredMessage(""), 6000);
   };
 
   const syncSensor = async () => {
@@ -522,6 +566,37 @@ export default function Dashboard() {
                 </div>
               )}
 
+              <button onClick={cleanupExpired} disabled={isCleaningExpired} className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300">
+                <div className="absolute inset-0 bg-gradient-to-r from-orange-600/20 to-red-600/20 group-hover:from-orange-600/30 group-hover:to-red-600/30 transition-all duration-300" />
+                <div className="relative flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-600 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/20 border border-white/10">
+                    <Clock className={`w-5 h-5 text-white ${isCleaningExpired ? 'animate-spin' : ''}`} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-white">Limpiar Expirados (3+ meses)</p>
+                    <p className="text-[10px] text-muted-foreground">Eliminar miembros sin renovar + sensor</p>
+                  </div>
+                </div>
+              </button>
+              {expiredMessage && (
+                <div className="px-3 py-2 rounded-xl text-xs font-medium bg-green-500/10 border border-green-500/20 text-green-400 text-center">
+                  {expiredMessage}
+                </div>
+              )}
+
+              <button onClick={() => { setIsForcedCleanup(false); setShowCleanupModal(true); }} className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300">
+                <div className="absolute inset-0 bg-gradient-to-r from-orange-600/20 to-red-600/20 group-hover:from-orange-600/30 group-hover:to-red-600/30 transition-all duration-300" />
+                <div className="relative flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-600 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/20 border border-white/10">
+                    <Trash2 className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-white">Limpieza de Datos</p>
+                    <p className="text-[10px] text-muted-foreground">Mantenimiento de base de datos</p>
+                  </div>
+                </div>
+              </button>
+
               <button onClick={() => router.push('/settings')} className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300">
                 <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-white/[0.02] group-hover:from-white/10 group-hover:to-white/5 transition-all duration-300" />
                 <div className="relative flex items-center gap-3">
@@ -579,17 +654,21 @@ export default function Dashboard() {
                   <Download className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">Mantenimiento Mensual</h3>
-                  <p className="text-[10px] text-muted-foreground">Limpieza de base de datos de accesos</p>
+                  <h3 className="text-lg font-bold text-white">Mantenimiento Quincenal</h3>
+                  <p className="text-[10px] text-muted-foreground">Limpieza de accesos y miembros eliminados</p>
                 </div>
               </div>
-              <button onClick={() => setShowCleanupModal(false)} className="text-muted-foreground hover:text-white transition-colors">
-                <X size={20} />
-              </button>
+              {!isForcedCleanup && (
+                <button onClick={() => setShowCleanupModal(false)} className="text-muted-foreground hover:text-white transition-colors">
+                  <X size={20} />
+                </button>
+              )}
             </div>
             <div className="p-6 space-y-4">
               <p className="text-sm text-muted-foreground">
-                Han pasado 30 días desde la última limpieza. Los registros de acceso serán eliminados de la base de datos. ¿Deseas guardar una copia antes?
+                {isForcedCleanup
+                  ? "Han transcurrido 15 días desde el último mantenimiento. Es necesario realizar la limpieza para evitar la acumulación excesiva de datos. ¿Deseas descargar una copia de seguridad en JSON de los accesos y miembros eliminados antes de proceder?"
+                  : "Se realizará la limpieza completa del historial de accesos diarios y la lista de miembros eliminados. ¿Deseas descargar una copia antes?"}
               </p>
 
               <div className="space-y-3 pt-2">
@@ -649,16 +728,22 @@ export default function Dashboard() {
                 </div>
               )}
 
-              <div className="pt-2">
+              <div className="pt-2 flex gap-2">
                 <button
-                  onClick={() => {
-                    localStorage.setItem('last_cleanup', new Date().toISOString());
-                    setShowCleanupModal(false);
-                  }}
-                  className="w-full py-2 text-sm text-muted-foreground hover:text-white transition-all"
+                  onClick={handlePostpone}
+                  disabled={isPostponing}
+                  className="flex-1 py-2 text-sm text-muted-foreground hover:text-white transition-all disabled:opacity-50"
                 >
-                  Recordármelo después
+                  {isPostponing ? 'Posponiendo...' : 'Recordar más tarde (6h)'}
                 </button>
+                {!isForcedCleanup && (
+                  <button
+                    onClick={() => setShowCleanupModal(false)}
+                    className="flex-1 py-2 text-sm text-muted-foreground hover:text-white transition-all"
+                  >
+                    Cancelar
+                  </button>
+                )}
               </div>
             </div>
           </div>

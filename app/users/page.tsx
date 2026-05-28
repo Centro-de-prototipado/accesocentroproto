@@ -101,10 +101,16 @@ function UsersContent() {
 
   const confirmRenewal = async () => {
     if (adminPass !== '12345678') { setAdminError("Contraseña incorrecta"); return; }
-    setRenewingIds(new Set(selected));
+    const ids = Array.from(selected);
+    setRenewingIds(new Set(ids));
     setShowAdminModal(false);
-    await Promise.all(Array.from(selected).map((id) => fetch(`${API_URL}/api/members/${id}/renew`, { method: "POST" })));
-    setMessage(`Mensualidad renovada para ${selected.size} miembro(s).`);
+    setAdminPass("");
+    try {
+      await Promise.all(ids.map((id) => fetch(`${API_URL}/api/members/${id}/renew`, { method: "POST" })));
+      setMessage(`Mensualidad renovada exitosamente para ${ids.length} miembro(s).`);
+    } catch {
+      setMessage("Error al renovar. Intenta de nuevo.");
+    }
     setSelected(new Set());
     setRenewingIds(new Set());
     fetchMembers();
@@ -123,33 +129,34 @@ function UsersContent() {
 
   const getStatus = (m: Member) => {
     if (m.estado === 'activo') return { label: "Activo", color: "from-green-500/20 to-green-600/10 text-green-400 border-green-500/20", icon: CheckCircle2 };
-    return { label: "Moroso", color: "from-orange-500/20 to-orange-600/10 text-orange-400 border-orange-500/20", icon: AlertTriangle };
+    return { label: "Renovar Mensualidad", color: "from-orange-500/20 to-orange-600/10 text-orange-400 border-orange-500/20", icon: AlertTriangle };
   };
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString("es-CO", { year: "numeric", month: "short", day: "numeric" });
 
   const getExpirationDate = (m: Member) => {
     if (m.rol === 'vip') return "VIP (No vence)";
-    if (!m.plan || !m.plan.duracion_dias) return "Sin plan";
+    const duracionDias = m.plan?.duracion_dias || 30;
     
     const expDate = new Date(m.fecha_registro);
-    expDate.setDate(expDate.getDate() + m.plan.duracion_dias);
-    
+    expDate.setDate(expDate.getDate() + duracionDias);
+
+    // 2 días de gracia para pagar
     const corteDate = new Date(expDate);
-    corteDate.setDate(corteDate.getDate() + 2); // 2 días de gracia
+    corteDate.setDate(corteDate.getDate() + 2);
     
     const now = new Date();
     
     if (now > corteDate) {
       return (
         <span className="text-red-400 font-semibold flex items-center gap-1">
-          <AlertTriangle className="w-3 h-3" /> Expirado ({formatDate(expDate.toISOString())})
+          <AlertTriangle className="w-3 h-3" /> Vencido ({formatDate(expDate.toISOString())})
         </span>
       );
     } else if (now > expDate) {
       return (
         <span className="text-yellow-400 font-semibold flex items-center gap-1">
-          <Clock className="w-3 h-3" /> Gracia ({formatDate(corteDate.toISOString())})
+          <Clock className="w-3 h-3" /> Gracia hasta {formatDate(corteDate.toISOString())}
         </span>
       );
     }
@@ -214,7 +221,7 @@ function UsersContent() {
             onClick={() => { setActiveTab('morosos'); setSelected(new Set()); }}
             className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 ${activeTab === 'morosos' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/20' : 'text-muted-foreground hover:bg-white/5'}`}
           >
-            Morosos (Vencidos)
+            Renovar Mensualidad
           </button>
           <button
             onClick={() => { setActiveTab('vip'); setSelected(new Set()); }}

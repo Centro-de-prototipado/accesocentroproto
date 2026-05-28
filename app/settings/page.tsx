@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, User, UserPlus, Trash2, Settings, LogOut, Search, ShieldCheck, Fingerprint, ArrowLeft, Loader2 } from "lucide-react";
+import { Lock, User, UserPlus, Trash2, Settings, LogOut, Search, ShieldCheck, Fingerprint, ArrowLeft, Loader2, Download, Cloud, Smartphone, X, Clock, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { API_URL } from '@/lib/config';
+import io from "socket.io-client";
 
 type Member = {
   id: number;
@@ -24,13 +25,49 @@ export default function SettingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [message, setMessage] = useState("");
+  const [showCleanupModal, setShowCleanupModal] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false);
+  const [isPostponing, setIsPostponing] = useState(false);
+  const [isCleaningExpired, setIsCleaningExpired] = useState(false);
+  const [expiredResult, setExpiredResult] = useState<number | null>(null);
+  const [expiredError, setExpiredError] = useState("");
 
-  useEffect(() => {
-    if (localStorage.getItem("adminToken")) {
-      setIsAuthenticated(true);
-      loadMembers();
-    }
-  }, []);
+  const handleCleanup = async (option: string) => {
+    setIsCleaning(true);
+    try {
+      const res = await fetch(`${API_URL}/api/cleanup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exportTo: option })
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (option === 'download' && data.data) {
+          const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = data.filename || 'limpieza_gym_export.json';
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        setMessage("Limpieza de base de datos realizada con éxito (accesos y miembros eliminados).");
+        setShowCleanupModal(false);
+        loadMembers();
+        setTimeout(() => setMessage(""), 5000);
+      } else { setMessage("Error: " + data.error); }
+    } catch { setMessage("Error conectando con el servidor"); }
+    finally { setIsCleaning(false); }
+  };
+
+  const handlePostpone = async () => {
+    setIsPostponing(true);
+    try {
+      await fetch(`${API_URL}/api/cleanup/postpone`, { method: 'POST' });
+      setShowCleanupModal(false);
+    } catch { setMessage("Error al posponer"); }
+    finally { setIsPostponing(false); }
+  };
 
   const loadMembers = () => {
     fetch(`${API_URL}/api/members`)
@@ -63,6 +100,30 @@ export default function SettingsPage() {
     localStorage.removeItem("adminToken");
     setIsAuthenticated(false);
     setUsername(""); setPassword("");
+  };
+
+  const handleCleanupExpired = async () => {
+    if (!confirm("¿Eliminar todos los miembros con más de 3 meses sin renovar? Esta acción liberará espacio en el sensor biométrico.")) return;
+    setIsCleaningExpired(true);
+    setExpiredResult(null);
+    setExpiredError("");
+    try {
+      const res = await fetch(`${API_URL}/api/cleanup-expired-members`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setExpiredResult(data.deleted);
+        setMessage(data.message);
+        loadMembers();
+        setTimeout(() => setMessage(""), 5000);
+      } else {
+        setExpiredResult(-1);
+        setExpiredError(data.error || "Error al limpiar");
+      }
+    } catch {
+      setExpiredResult(-1);
+      setExpiredError("Error de conexión");
+    }
+    finally { setIsCleaningExpired(false); }
   };
 
   const handleDelete = async (id: number) => {
@@ -161,7 +222,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Cards */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Link href="/admin/membresias/nueva"
           className="glass rounded-2xl p-6 hover:border-red-500/30 transition-all duration-300 group animate-tnt-slide-up stagger-2">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-blue-500/20">
@@ -227,6 +288,51 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+
+        <div className="glass rounded-2xl p-6 hover:border-red-500/30 transition-all duration-300 group animate-tnt-slide-up stagger-3 cursor-pointer flex flex-col justify-between"
+          onClick={() => setShowCleanupModal(true)}>
+          <div>
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-600 to-red-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-orange-500/20">
+              <Trash2 className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">Limpieza de Datos</h3>
+            <p className="text-sm text-muted-foreground">Limpia el historial de accesos diarios y la lista de miembros eliminados para optimizar el almacenamiento.</p>
+          </div>
+          <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-orange-400">
+            Iniciar mantenimiento <ArrowLeft className="w-3 h-3 rotate-180" />
+          </div>
+        </div>
+
+        <div className="glass rounded-2xl p-6 border border-orange-500/10 animate-tnt-slide-up stagger-3">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-600 to-red-600 flex items-center justify-center mb-4 shadow-lg shadow-orange-500/20">
+            <Clock className="w-6 h-6 text-white" />
+          </div>
+          <h3 className="text-lg font-bold text-white mb-2">Limpiar Miembros Expirados</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Elimina miembros con más de 3 meses sin renovar su mensualidad. También libera espacio en la memoria del sensor biométrico enviando los IDs de huella a borrar.
+          </p>
+          <div className="space-y-3">
+            <button
+              onClick={handleCleanupExpired}
+              disabled={isCleaningExpired}
+              className="w-full py-3 rounded-xl font-bold text-sm bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white shadow-lg shadow-orange-500/20 transition-all border border-white/10 flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isCleaningExpired ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              {isCleaningExpired ? 'Eliminando...' : 'Eliminar Expirados'}
+            </button>
+            {expiredResult !== null && expiredResult >= 0 && (
+              <div className="px-4 py-3 rounded-xl text-sm font-medium bg-green-500/10 border border-green-500/20 text-green-400">
+                Se eliminaron {expiredResult} miembro(s) expirados y se enviaron comandos de borrado al sensor.
+              </div>
+            )}
+            {expiredResult !== null && expiredResult < 0 && (
+              <div className="px-4 py-3 rounded-xl text-sm font-medium bg-red-500/10 border border-red-500/20 text-red-400">
+                Error: {expiredError}
+              </div>
+            )}
+          </div>
+        </div>
+
       </div>
 
       {/* System Info */}
@@ -251,6 +357,106 @@ export default function SettingsPage() {
           ))}
         </div>
       </div>
+
+      {/* Quincenal Cleanup Modal */}
+      {showCleanupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="glass w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-700 to-red-900 flex items-center justify-center shadow-lg shadow-red-500/20 border border-white/10">
+                  <Download className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Mantenimiento Quincenal</h3>
+                  <p className="text-[10px] text-muted-foreground">Limpieza de accesos y miembros eliminados</p>
+                </div>
+              </div>
+              <button onClick={() => setShowCleanupModal(false)} className="text-muted-foreground hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Se realizará la limpieza completa del historial de accesos diarios y la lista de miembros eliminados. ¿Deseas descargar una copia antes?
+              </p>
+
+              <div className="space-y-3 pt-2">
+                <button
+                  onClick={() => handleCleanup('drive')}
+                  disabled={isCleaning}
+                  className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300 bg-white/[0.02] border border-white/5 hover:border-red-500/20 hover:bg-red-500/5"
+                >
+                  <div className="relative flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-700 to-red-900 flex items-center justify-center shadow-lg shadow-red-500/10 border border-white/10">
+                      <Cloud className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-white">Guardar en Google Drive</p>
+                      <p className="text-[10px] text-muted-foreground">Exportar y subir a la nube</p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleCleanup('download')}
+                  disabled={isCleaning}
+                  className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300 bg-white/[0.02] border border-white/5 hover:border-red-500/20 hover:bg-red-500/5"
+                >
+                  <div className="relative flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-700 to-red-900 flex items-center justify-center shadow-lg shadow-red-500/10 border border-white/10">
+                      <Smartphone className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-white">Descargar a PC / Celular</p>
+                      <p className="text-[10px] text-muted-foreground">Descargar archivo JSON</p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleCleanup('delete')}
+                  disabled={isCleaning}
+                  className="w-full group relative p-4 rounded-xl overflow-hidden transition-all duration-300 bg-white/[0.02] border border-white/5 hover:border-red-500/20 hover:bg-red-500/5"
+                >
+                  <div className="relative flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-lg shadow-red-500/10 border border-white/10">
+                      <Trash2 className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-white">Solo limpiar (sin guardar)</p>
+                      <p className="text-[10px] text-muted-foreground">Eliminar registros sin respaldo</p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {isCleaning && (
+                <div className="text-center py-2">
+                  <div className="w-5 h-5 mx-auto animate-spin rounded-full border-2 border-red-500 border-t-transparent" />
+                  <p className="text-xs text-muted-foreground mt-2">Procesando...</p>
+                </div>
+              )}
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  onClick={handlePostpone}
+                  disabled={isPostponing}
+                  className="flex-1 py-2 text-sm text-muted-foreground hover:text-white transition-all disabled:opacity-50"
+                >
+                  {isPostponing ? 'Posponiendo...' : 'Recordar más tarde (6h)'}
+                </button>
+                <button
+                  onClick={() => setShowCleanupModal(false)}
+                  className="flex-1 py-2 text-sm text-muted-foreground hover:text-white transition-all"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
