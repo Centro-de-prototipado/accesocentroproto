@@ -100,13 +100,37 @@ function UsersContent() {
   };
 
   const confirmRenewal = async () => {
-    if (adminPass !== '12345678') { setAdminError("Contraseña incorrecta"); return; }
-    const ids = Array.from(selected);
-    setRenewingIds(new Set(ids));
-    setShowAdminModal(false);
-    setAdminPass("");
+    setAdminError("");
     try {
-      await Promise.all(ids.map((id) => fetch(`${API_URL}/api/members/${id}/renew`, { method: "POST" })));
+      const loginRes = await fetch(`${API_URL}/api/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "centro", password: adminPass })
+      });
+      const loginData = await loginRes.json();
+      if (!loginData.success) {
+        setAdminError(loginData.error || "Contraseña incorrecta");
+        return;
+      }
+
+      const token = loginData.token;
+      localStorage.setItem("adminToken", token);
+
+      const ids = Array.from(selected);
+      setRenewingIds(new Set(ids));
+      setShowAdminModal(false);
+      setAdminPass("");
+
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`${API_URL}/api/members/${id}/renew`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`
+            }
+          })
+        )
+      );
       setMessage(`Mensualidad renovada exitosamente para ${ids.length} miembro(s).`);
     } catch {
       setMessage("Error al renovar. Intenta de nuevo.");
@@ -120,11 +144,57 @@ function UsersContent() {
   const deleteMember = async (id: number) => {
     if (!confirm("¿Estás seguro de eliminar este miembro?")) return;
     setDeletingIds(prev => new Set(prev).add(id));
+    
+    let token = localStorage.getItem("adminToken");
+    if (!token) {
+      const password = prompt("Esta acción requiere privilegios de administrador. Ingresa la contraseña:");
+      if (!password) {
+        setDeletingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+        return;
+      }
+      try {
+        const loginRes = await fetch(`${API_URL}/api/admin/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: "centro", password })
+        });
+        const loginData = await loginRes.json();
+        if (loginData.success) {
+          token = loginData.token;
+          localStorage.setItem("adminToken", token as string);
+        } else {
+          alert("Contraseña incorrecta");
+          setDeletingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+          return;
+        }
+      } catch {
+        alert("Error de conexión al autenticar");
+        setDeletingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+        return;
+      }
+    }
+
     try {
-      const res = await fetch(`${API_URL}/api/members/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API_URL}/api/members/${id}`, { 
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
       const data = await res.json();
-      if (!data.success) { alert("Error: " + data.error); setDeletingIds(prev => { const next = new Set(prev); next.delete(id); return next; }); }
-    } catch { alert("Error conectando con el servidor"); setDeletingIds(prev => { const next = new Set(prev); next.delete(id); return next; }); }
+      if (!data.success) {
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem("adminToken");
+          alert("Sesión expirada o no autorizada. Por favor, reintenta e ingresa la contraseña.");
+        } else {
+          alert("Error: " + data.error);
+        }
+        setDeletingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      }
+    } catch {
+      alert("Error conectando con el servidor");
+      setDeletingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+    }
   };
 
   const getStatus = (m: Member) => {
@@ -334,7 +404,7 @@ function UsersContent() {
 
       {/* Admin Auth Modal */}
       {showAdminModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
           <div className="glass w-full max-w-sm rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">

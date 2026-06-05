@@ -32,12 +32,44 @@ export default function SettingsPage() {
   const [expiredResult, setExpiredResult] = useState<number | null>(null);
   const [expiredError, setExpiredError] = useState("");
 
+  const getAdminToken = async (): Promise<string | null> => {
+    let token = localStorage.getItem("adminToken");
+    if (token) return token;
+
+    const password = prompt("Esta acción requiere privilegios de administrador. Ingresa la contraseña:");
+    if (!password) return null;
+
+    try {
+      const loginRes = await fetch(`${API_URL}/api/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "centro", password })
+      });
+      const loginData = await loginRes.json();
+      if (loginData.success) {
+        localStorage.setItem("adminToken", loginData.token);
+        return loginData.token;
+      } else {
+        alert("Contraseña incorrecta");
+        return null;
+      }
+    } catch {
+      alert("Error de conexión al autenticar");
+      return null;
+    }
+  };
+
   const handleCleanup = async (option: string) => {
+    const token = await getAdminToken();
+    if (!token) return;
     setIsCleaning(true);
     try {
       const res = await fetch(`${API_URL}/api/cleanup`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ exportTo: option })
       });
       const data = await res.json();
@@ -55,16 +87,25 @@ export default function SettingsPage() {
         setShowCleanupModal(false);
         loadMembers();
         setTimeout(() => setMessage(""), 5000);
-      } else { setMessage("Error: " + data.error); }
+      } else { 
+        if (res.status === 401 || res.status === 403) localStorage.removeItem("adminToken");
+        setMessage("Error: " + data.error); 
+      }
     } catch { setMessage("Error conectando con el servidor"); }
     finally { setIsCleaning(false); }
   };
 
   const handlePostpone = async () => {
+    const token = await getAdminToken();
+    if (!token) return;
     setIsPostponing(true);
     try {
-      await fetch(`${API_URL}/api/cleanup/postpone`, { method: 'POST' });
-      setShowCleanupModal(false);
+      const res = await fetch(`${API_URL}/api/cleanup/postpone`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) setShowCleanupModal(false);
+      else if (res.status === 401 || res.status === 403) localStorage.removeItem("adminToken");
     } catch { setMessage("Error al posponer"); }
     finally { setIsPostponing(false); }
   };
@@ -104,11 +145,18 @@ export default function SettingsPage() {
 
   const handleCleanupExpired = async () => {
     if (!confirm("¿Eliminar todos los miembros con más de 3 meses sin renovar? Esta acción liberará espacio en el sensor biométrico.")) return;
+    const token = await getAdminToken();
+    if (!token) return;
     setIsCleaningExpired(true);
     setExpiredResult(null);
     setExpiredError("");
     try {
-      const res = await fetch(`${API_URL}/api/cleanup-expired-members`, { method: 'POST' });
+      const res = await fetch(`${API_URL}/api/cleanup-expired-members`, { 
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await res.json();
       if (data.success) {
         setExpiredResult(data.deleted);
@@ -116,6 +164,7 @@ export default function SettingsPage() {
         loadMembers();
         setTimeout(() => setMessage(""), 5000);
       } else {
+        if (res.status === 401 || res.status === 403) handleLogout();
         setExpiredResult(-1);
         setExpiredError(data.error || "Error al limpiar");
       }
@@ -127,15 +176,25 @@ export default function SettingsPage() {
   };
 
   const handleDelete = async (id: number) => {
+    const token = await getAdminToken();
+    if (!token) return;
     try {
-      const res = await fetch(`${API_URL}/api/members/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API_URL}/api/members/${id}`, { 
+        method: "DELETE",
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await res.json();
       if (data.success) {
         setMessage("Miembro eliminado correctamente.");
         setDeleteConfirm(null);
         loadMembers();
         setTimeout(() => setMessage(""), 4000);
-      } else { setMessage("Error: " + (data.error || "No se pudo eliminar")); }
+      } else { 
+        if (res.status === 401 || res.status === 403) handleLogout();
+        setMessage("Error: " + (data.error || "No se pudo eliminar")); 
+      }
     } catch { setMessage("Error conectando con el servidor"); }
   };
 
@@ -360,7 +419,7 @@ export default function SettingsPage() {
 
       {/* Quincenal Cleanup Modal */}
       {showCleanupModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
           <div className="glass w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-6 border-b border-white/5 flex items-center justify-between">
               <div className="flex items-center gap-3">

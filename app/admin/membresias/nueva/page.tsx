@@ -55,15 +55,28 @@ export default function NuevaMembresia() {
   const capturarHuella = async () => {
     setError(""); setHuellaId(null); setIsSensorActive(true);
     setEnrollStatus("Obteniendo ID disponible...");
+    const token = localStorage.getItem("adminToken");
+    if (!token) { setError("Debes iniciar sesión como administrador."); setIsSensorActive(false); setEnrollStatus("Inactivo"); return; }
     try {
-      const idRes = await fetch(`${API_URL}/api/next-huella-id`);
+      const idRes = await fetch(`${API_URL}/api/next-huella-id`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (idRes.status === 401 || idRes.status === 403) {
+        setError("Sesión expirada. Vuelve a iniciar sesión.");
+        localStorage.removeItem("adminToken");
+        setIsSensorActive(false); setEnrollStatus("Inactivo");
+        return;
+      }
       const idData = await idRes.json();
       const nextId = idData.huella_id;
       if (!nextId) throw new Error("No se pudo obtener un ID de huella.");
       setEnrollStatus("Despertando sensor...");
       const res = await fetch(`${API_URL}/api/devices/${DEVICE_ID}/enroll`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ huella_id: nextId })
       });
       const data = await res.json();
@@ -81,9 +94,13 @@ export default function NuevaMembresia() {
     e.preventDefault();
     if (huellaId === null) { setError("Debes capturar la huella antes de guardar."); return; }
     try {
+      const token = localStorage.getItem("adminToken");
       const res = await fetch(`${API_URL}/api/members`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ cedula, nombre, telefono, huella_id: huellaId, rol, fecha_registro: fechaRegistro }),
       });
       const data = await res.json();

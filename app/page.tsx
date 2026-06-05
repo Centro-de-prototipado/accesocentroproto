@@ -189,12 +189,45 @@ export default function Dashboard() {
       .catch(err => console.error("Could not check cleanup status", err));
   }, []);
 
+  const getAdminToken = async (): Promise<string | null> => {
+    let token = localStorage.getItem("adminToken");
+    if (token) return token;
+
+    const password = prompt("Esta acción requiere privilegios de administrador. Ingresa la contraseña:");
+    if (!password) return null;
+
+    try {
+      const loginRes = await fetch(`${API_URL}/api/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "centro", password })
+      });
+      const loginData = await loginRes.json();
+      if (loginData.success) {
+        localStorage.setItem("adminToken", loginData.token);
+        return loginData.token;
+      } else {
+        alert("Contraseña incorrecta");
+        return null;
+      }
+    } catch {
+      alert("Error de conexión al autenticar");
+      return null;
+    }
+  };
+
   const handleCleanup = async (option: string) => {
+    const token = await getAdminToken();
+    if (!token) return;
+
     setIsCleaning(true);
     try {
       const res = await fetch(`${API_URL}/api/cleanup`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ exportTo: option })
       });
       const data = await res.json();
@@ -214,7 +247,10 @@ export default function Dashboard() {
         fetch(`${API_URL}/api/stats`)
           .then(r => r.json())
           .then(d => setStats(prev => ({ ...prev, ...d })));
-      } else { alert("Error: " + data.error); }
+      } else { 
+        if (res.status === 401 || res.status === 403) localStorage.removeItem("adminToken");
+        alert("Error: " + data.error); 
+      }
     } catch { alert("Error conectando con el servidor"); }
     finally { setIsCleaning(false); }
   };
@@ -232,15 +268,24 @@ export default function Dashboard() {
   };
 
   const cleanupExpired = async () => {
+    const token = await getAdminToken();
+    if (!token) return;
+
     setIsCleaningExpired(true);
     setExpiredMessage("");
     try {
-      const res = await fetch(`${API_URL}/api/cleanup-expired-members`, { method: 'POST' });
+      const res = await fetch(`${API_URL}/api/cleanup-expired-members`, { 
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await res.json();
       if (data.success) {
         setExpiredMessage(data.message);
         fetch(`${API_URL}/api/stats`).then(r => r.json()).then(d => setStats(prev => ({ ...prev, ...d })));
       } else {
+        if (res.status === 401 || res.status === 403) localStorage.removeItem("adminToken");
         setExpiredMessage("Error: " + (data.error || "No se pudo completar"));
       }
     } catch {
@@ -251,14 +296,23 @@ export default function Dashboard() {
   };
 
   const syncSensor = async () => {
+    const token = await getAdminToken();
+    if (!token) return;
+
     setIsSyncing(true);
     setSyncMessage("");
     try {
-      const res = await fetch(`${API_URL}/api/sync-sensor`, { method: 'POST' });
+      const res = await fetch(`${API_URL}/api/sync-sensor`, { 
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await res.json();
       if (data.success) {
         setSyncMessage(data.message || "Comando de sincronización enviado");
       } else {
+        if (res.status === 401 || res.status === 403) localStorage.removeItem("adminToken");
         setSyncMessage("Error al sincronizar sensor");
       }
     } catch {
@@ -296,7 +350,12 @@ export default function Dashboard() {
       
       setShowAdminModal(false);
       
-      const openRes = await fetch(`${API_URL}/api/devices/esp32c6_gimnasio_01/open`, { method: 'POST' });
+      const openRes = await fetch(`${API_URL}/api/devices/esp32c6_gimnasio_01/open`, { 
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${loginData.token}`
+        }
+      });
       if(openRes.ok) {
         alert("¡Puerta abierta!");
       } else {
@@ -646,7 +705,7 @@ export default function Dashboard() {
 
       {/* Quincenal Cleanup Modal */}
       {showCleanupModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
           <div className="glass w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-6 border-b border-white/5 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -752,7 +811,7 @@ export default function Dashboard() {
 
       {/* Admin Auth Modal para Abrir Puerta */}
       {showAdminModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
           <div className="glass w-full max-w-sm rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
