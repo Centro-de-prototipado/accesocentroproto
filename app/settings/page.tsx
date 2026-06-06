@@ -83,7 +83,7 @@ export default function SettingsPage() {
           a.click();
           URL.revokeObjectURL(url);
         }
-        setMessage("Limpieza de base de datos realizada con éxito (accesos y miembros eliminados).");
+        setMessage("Limpieza de base de datos realizada con éxito (accesos y usuarios eliminados).");
         setShowCleanupModal(false);
         loadMembers();
         setTimeout(() => setMessage(""), 5000);
@@ -144,7 +144,7 @@ export default function SettingsPage() {
   };
 
   const handleCleanupExpired = async () => {
-    if (!confirm("¿Eliminar todos los miembros con más de 3 meses sin renovar? Esta acción liberará espacio en el sensor biométrico.")) return;
+    if (!confirm("¿Eliminar todos los usuarios con más de 3 meses sin renovar? Esta acción liberará espacio en el sensor biométrico.")) return;
     const token = await getAdminToken();
     if (!token) return;
     setIsCleaningExpired(true);
@@ -187,7 +187,7 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage("Miembro eliminado correctamente.");
+        setMessage("Usuario eliminado correctamente.");
         setDeleteConfirm(null);
         loadMembers();
         setTimeout(() => setMessage(""), 4000);
@@ -287,8 +287,8 @@ export default function SettingsPage() {
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-blue-500/20">
             <UserPlus className="w-6 h-6 text-white" />
           </div>
-          <h3 className="text-lg font-bold text-white mb-2">Añadir Miembro</h3>
-          <p className="text-sm text-muted-foreground">Registra un nuevo miembro con sus datos y captura su huella biométrica en el sensor.</p>
+          <h3 className="text-lg font-bold text-white mb-2">Añadir Usuario</h3>
+          <p className="text-sm text-muted-foreground">Registra un nuevo usuario con sus datos y captura su huella biométrica en el sensor.</p>
           <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-blue-400">
             Ir al registro <ArrowLeft className="w-3 h-3 rotate-180" />
           </div>
@@ -298,19 +298,19 @@ export default function SettingsPage() {
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-600 to-orange-500 flex items-center justify-center mb-4 shadow-lg shadow-red-500/20">
             <Trash2 className="w-6 h-6 text-white" />
           </div>
-          <h3 className="text-lg font-bold text-white mb-2">Eliminar Miembro</h3>
-          <p className="text-sm text-muted-foreground mb-4">Busca y da de baja un miembro del sistema.</p>
+          <h3 className="text-lg font-bold text-white mb-2">Eliminar Usuario</h3>
+          <p className="text-sm text-muted-foreground mb-4">Busca y da de baja un usuario del sistema.</p>
 
           <div className="relative mb-4">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2.5 bg-background/50 border border-white/10 rounded-xl text-sm text-white placeholder-muted-foreground focus:ring-2 focus:ring-red-500 outline-none transition-all"
-              placeholder="Buscar miembro..." />
+              placeholder="Buscar usuario..." />
           </div>
 
           <div className="max-h-60 overflow-y-auto space-y-2">
             {filteredMembers.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-4">{searchQuery ? "Sin resultados" : "No hay miembros"}</p>
+              <p className="text-muted-foreground text-sm text-center py-4">{searchQuery ? "Sin resultados" : "No hay usuarios"}</p>
             ) : (
               filteredMembers.map((m, idx) => (
                 <div key={m.id}
@@ -366,9 +366,9 @@ export default function SettingsPage() {
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-600 to-red-600 flex items-center justify-center mb-4 shadow-lg shadow-orange-500/20">
             <Clock className="w-6 h-6 text-white" />
           </div>
-          <h3 className="text-lg font-bold text-white mb-2">Limpiar Miembros Expirados</h3>
+          <h3 className="text-lg font-bold text-white mb-2">Limpiar Usuarios Expirados</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Elimina miembros con más de 3 meses sin renovar su mensualidad. También libera espacio en la memoria del sensor biométrico enviando los IDs de huella a borrar.
+            Elimina usuarios con más de 3 meses sin renovar su mensualidad. También libera espacio en la memoria del sensor biométrico enviando los IDs de huella a borrar.
           </p>
           <div className="space-y-3">
             <button
@@ -381,7 +381,7 @@ export default function SettingsPage() {
             </button>
             {expiredResult !== null && expiredResult >= 0 && (
               <div className="px-4 py-3 rounded-xl text-sm font-medium bg-green-500/10 border border-green-500/20 text-green-400">
-                Se eliminaron {expiredResult} miembro(s) expirados y se enviaron comandos de borrado al sensor.
+                Se eliminaron {expiredResult} usuario(s) expirados y se enviaron comandos de borrado al sensor.
               </div>
             )}
             {expiredResult !== null && expiredResult < 0 && (
@@ -404,7 +404,7 @@ export default function SettingsPage() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Miembros Totales", value: members.length, color: "from-blue-600/20 to-blue-700/10 text-blue-400" },
+            { label: "Usuarios Totales", value: members.length, color: "from-blue-600/20 to-blue-700/10 text-blue-400" },
             { label: "Huellas Registradas", value: members.filter(m => m.huella_id).length, color: "from-green-600/20 to-green-700/10 text-green-400" },
             { label: "Versión Sistema", value: "v2.0", color: "from-yellow-600/20 to-yellow-700/10 text-yellow-400" },
             { label: "Estado", value: "Operacional", color: "from-green-600/20 to-green-700/10 text-green-400" },
@@ -428,7 +428,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white">Mantenimiento Quincenal</h3>
-                  <p className="text-[10px] text-muted-foreground">Limpieza de accesos y miembros eliminados</p>
+                  <p className="text-[10px] text-muted-foreground">Limpieza de accesos y usuarios eliminados</p>
                 </div>
               </div>
               <button onClick={() => setShowCleanupModal(false)} className="text-muted-foreground hover:text-white transition-colors">
@@ -437,7 +437,7 @@ export default function SettingsPage() {
             </div>
             <div className="p-6 space-y-4">
               <p className="text-sm text-muted-foreground">
-                Se realizará la limpieza completa del historial de accesos diarios y la lista de miembros eliminados. ¿Deseas descargar una copia antes?
+                Se realizará la limpieza completa del historial de accesos diarios y la lista de usuarios eliminados. ¿Deseas descargar una copia antes?
               </p>
 
               <div className="space-y-3 pt-2">

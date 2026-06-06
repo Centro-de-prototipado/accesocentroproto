@@ -90,7 +90,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/5 flex items-center justify-around py-2 px-2 md:hidden">
               {[
                 { href: '/', label: 'Dashboard', icon: 'D' },
-                { href: '/users', label: 'Miembros', icon: 'M' },
+                { href: '/users', label: 'Usuarios', icon: 'U' },
                 { href: '/logs', label: 'Accesos', icon: 'A' },
                 { href: '/settings', label: 'Ajustes', icon: 'S' },
               ].map((item) => (

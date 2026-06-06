@@ -107,7 +107,7 @@ export default function NuevaMembresia() {
       if (data.success) {
         setSuccess(true);
         setTimeout(() => { localStorage.removeItem("adminToken"); router.push("/settings"); }, 3000);
-      } else { setError(data.error || "Error al crear miembro"); }
+      } else { setError(data.error || "Error al crear usuario"); }
     } catch { setError("Error conectando con el servidor"); }
   };
 
@@ -120,7 +120,7 @@ export default function NuevaMembresia() {
             <ChevronLeft className="w-5 h-5 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-2xl font-black text-white">Nuevo Miembro</h1>
+            <h1 className="text-2xl font-black text-white">Nuevo Usuario</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Registra los datos y captura la huella</p>
           </div>
         </div>
@@ -135,7 +135,7 @@ export default function NuevaMembresia() {
           <div className="px-4 py-4 rounded-xl mb-6 bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 flex items-center gap-3">
             <CheckCircle2 className="w-6 h-6 text-green-400" />
             <div>
-              <h4 className="font-semibold text-green-400">¡Miembro registrado!</h4>
+              <h4 className="font-semibold text-green-400">¡Usuario registrado!</h4>
               <p className="text-xs text-green-400/70">Redirigiendo...</p>
             </div>
           </div>
@@ -178,7 +178,7 @@ export default function NuevaMembresia() {
               <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <select value={rol} onChange={(e) => setRol(e.target.value)}
                 className="w-full pl-9 pr-3 py-3 bg-background/50 border border-white/10 rounded-xl text-sm text-white focus:ring-2 focus:ring-red-500 outline-none transition-all appearance-none cursor-pointer">
-                <option value="miembro" className="bg-[#1a1a1a]">Miembro Regular (Requiere Pago)</option>
+                <option value="miembro" className="bg-[#1a1a1a]">Usuario Regular (Requiere Pago)</option>
                 <option value="vip" className="bg-[#1a1a1a]">VIP / Staff (No requiere Pago)</option>
               </select>
             </div>
@@ -200,7 +200,7 @@ export default function NuevaMembresia() {
                 ? 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-lg shadow-blue-500/20'
                 : 'bg-white/5 text-muted-foreground cursor-not-allowed'
             }`}>
-            Guardar Miembro
+            Guardar Usuario
           </button>
         </form>
       </div>

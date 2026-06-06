@@ -445,7 +445,7 @@ export default function Dashboard() {
           onClick={() => router.push('/users?filter=today')}
         />
         <StatCard
-          title="Miembros Activos"
+          title="Usuarios Activos"
           value={stats.active}
           icon={Users}
           gradient="bg-gradient-to-br from-green-600/20 to-green-700/10"
@@ -453,7 +453,7 @@ export default function Dashboard() {
           onClick={() => router.push('/users?filter=active')}
         />
         <StatCard
-          title="Miembros Inactivos"
+          title="Usuarios Inactivos"
           value={stats.inactive}
           icon={Flame}
           gradient="bg-gradient-to-br from-red-600/20 to-red-700/10"
@@ -601,7 +601,7 @@ export default function Dashboard() {
                     <Users className="w-5 h-5 text-white" />
                   </div>
                   <div className="text-left">
-                    <p className="text-sm font-bold text-white">Gestionar Miembros</p>
+                    <p className="text-sm font-bold text-white">Gestionar Usuarios</p>
                     <p className="text-[10px] text-muted-foreground">Renovar o consultar</p>
                   </div>
                 </div>
@@ -615,7 +615,7 @@ export default function Dashboard() {
                   </div>
                   <div className="text-left">
                     <p className="text-sm font-bold text-white">Sincronizar Sensor</p>
-                    <p className="text-[10px] text-muted-foreground">Actualizar lista de miembros activos</p>
+                    <p className="text-[10px] text-muted-foreground">Actualizar lista de usuarios activos</p>
                   </div>
                 </div>
               </button>
@@ -633,7 +633,7 @@ export default function Dashboard() {
                   </div>
                   <div className="text-left">
                     <p className="text-sm font-bold text-white">Limpiar Expirados (3+ meses)</p>
-                    <p className="text-[10px] text-muted-foreground">Eliminar miembros sin renovar + sensor</p>
+                    <p className="text-[10px] text-muted-foreground">Eliminar usuarios sin renovar + sensor</p>
                   </div>
                 </div>
               </button>
@@ -714,7 +714,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white">Mantenimiento Quincenal</h3>
-                  <p className="text-[10px] text-muted-foreground">Limpieza de accesos y miembros eliminados</p>
+                  <p className="text-[10px] text-muted-foreground">Limpieza de accesos y usuarios eliminados</p>
                 </div>
               </div>
               {!isForcedCleanup && (
@@ -726,8 +726,8 @@ export default function Dashboard() {
             <div className="p-6 space-y-4">
               <p className="text-sm text-muted-foreground">
                 {isForcedCleanup
-                  ? "Han transcurrido 15 días desde el último mantenimiento. Es necesario realizar la limpieza para evitar la acumulación excesiva de datos. ¿Deseas descargar una copia de seguridad en JSON de los accesos y miembros eliminados antes de proceder?"
-                  : "Se realizará la limpieza completa del historial de accesos diarios y la lista de miembros eliminados. ¿Deseas descargar una copia antes?"}
+                  ? "Han transcurrido 15 días desde el último mantenimiento. Es necesario realizar la limpieza para evitar la acumulación excesiva de datos. ¿Deseas descargar una copia de seguridad en JSON de los accesos y usuarios eliminados antes de proceder?"
+                  : "Se realizará la limpieza completa del historial de accesos diarios y la lista de usuarios eliminados. ¿Deseas descargar una copia antes?"}
               </p>
 
               <div className="space-y-3 pt-2">

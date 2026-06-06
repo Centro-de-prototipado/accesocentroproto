@@ -58,7 +58,7 @@ export default function Sidebar() {
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           <p className="px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Menú Principal</p>
           <NavItem href="/" label="Dashboard" isActive={pathname === '/'} />
-          <NavItem href="/users" label="Miembros" isActive={pathname.startsWith('/users') || pathname.startsWith('/admin/membresias')} />
+          <NavItem href="/users" label="Usuarios" isActive={pathname.startsWith('/users') || pathname.startsWith('/admin/membresias')} />
           <NavItem href="/logs" label="Historial" isActive={pathname === '/logs'} />
 
           <div className="my-4 border-t border-white/5" />

@@ -26,7 +26,7 @@ export default function UsersPage() {
           <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-red-500/20 to-orange-500/20 flex items-center justify-center">
             <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
           </div>
-          <p className="text-muted-foreground text-sm">Cargando miembros...</p>
+          <p className="text-muted-foreground text-sm">Cargando usuarios...</p>
         </div>
       </div>
     }>
@@ -131,7 +131,7 @@ function UsersContent() {
           })
         )
       );
-      setMessage(`Mensualidad renovada exitosamente para ${ids.length} miembro(s).`);
+      setMessage(`Mensualidad renovada exitosamente para ${ids.length} usuario(s).`);
     } catch {
       setMessage("Error al renovar. Intenta de nuevo.");
     }
@@ -142,7 +142,7 @@ function UsersContent() {
   };
 
   const deleteMember = async (id: number) => {
-    if (!confirm("¿Estás seguro de eliminar este miembro?")) return;
+    if (!confirm("¿Estás seguro de eliminar este usuario?")) return;
     setDeletingIds(prev => new Set(prev).add(id));
     
     let token = localStorage.getItem("adminToken");
@@ -260,14 +260,14 @@ function UsersContent() {
                 <Users className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-black text-white">Miembros</h2>
-                <p className="text-xs text-muted-foreground">{members.length} miembro(s) registrados</p>
+                <h2 className="text-2xl font-black text-white">Usuarios</h2>
+                <p className="text-xs text-muted-foreground">{members.length} usuario(s) registrados</p>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => router.push('/admin/membresias/nueva')} className="px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-lg shadow-blue-500/20 transition-all">
-              <UserPlus className="w-4 h-4" /> Nuevo Miembro
+              <UserPlus className="w-4 h-4" /> Nuevo Usuario
             </button>
             {activeTab !== 'vip' && (
               <button onClick={handleRenewClick} disabled={selected.size === 0} className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all ${
@@ -285,7 +285,7 @@ function UsersContent() {
             onClick={() => { setActiveTab('regulares'); setSelected(new Set()); }}
             className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 ${activeTab === 'regulares' ? 'bg-white/10 text-white' : 'text-muted-foreground hover:bg-white/5'}`}
           >
-            Miembros Activos
+            Usuarios Activos
           </button>
           <button
             onClick={() => { setActiveTab('morosos'); setSelected(new Set()); }}
@@ -305,6 +305,7 @@ function UsersContent() {
         <div className="relative mt-4 max-w-md">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+            autoComplete="off"
             className="w-full pl-9 pr-4 py-2.5 bg-background/50 border border-white/10 rounded-xl text-sm text-white placeholder-muted-foreground focus:ring-2 focus:ring-red-500 outline-none transition-all"
             placeholder="Buscar por nombre, cédula, celular o huella..." />
         </div>
@@ -331,7 +332,7 @@ function UsersContent() {
                   <input type="checkbox" checked={filteredMembers.length > 0 && filteredMembers.every(m => selected.has(m.id))} onChange={toggleAll}
                     className="w-4 h-4 rounded border-white/20 accent-red-500 bg-transparent" />
                 </th>
-                <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Miembro</th>
+                <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Usuario</th>
                 <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Cédula</th>
                 <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Contacto</th>
                 <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Huella</th>
@@ -348,7 +349,7 @@ function UsersContent() {
                     <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-white/5 flex items-center justify-center">
                       <Users className="w-6 h-6" />
                     </div>
-                    {searchQuery ? "Sin resultados para la búsqueda." : "No hay miembros registrados."}
+                    {searchQuery ? "Sin resultados para la búsqueda." : "No hay usuarios registrados."}
                   </td>
                 </tr>
               ) : (
@@ -415,11 +416,22 @@ function UsersContent() {
               </button>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
-              Ingresa la contraseña de administrador para renovar {selected.size} miembro(s).
+              Ingresa la contraseña de administrador para renovar {selected.size} usuario(s).
             </p>
             <div className="space-y-4">
+              {/* Campo oculto de usuario para prevenir que el autorrelleno del navegador altere el buscador */}
+              <input 
+                type="text" 
+                name="username" 
+                value="centro" 
+                readOnly 
+                autoComplete="username" 
+                className="absolute opacity-0 pointer-events-none w-0 h-0" 
+                tabIndex={-1} 
+              />
               <input type="password" value={adminPass} onChange={(e) => setAdminPass(e.target.value)} autoFocus
                 placeholder="••••••••"
+                autoComplete="current-password"
                 className="w-full px-4 py-3 bg-background/50 border border-white/10 rounded-xl text-lg tracking-widest text-white placeholder-muted-foreground focus:ring-2 focus:ring-red-500 outline-none transition-all"
                 onKeyDown={(e) => e.key === 'Enter' && confirmRenewal()} />
               {adminError && <p className="text-xs text-red-400 font-medium">{adminError}</p>}
