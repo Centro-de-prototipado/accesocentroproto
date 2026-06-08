@@ -27,10 +27,11 @@ export default function NuevaMembresia() {
   useEffect(() => {
     if (!localStorage.getItem("adminToken")) { router.push("/admin/login"); return; }
 
+    const fallbackPlans = [{ id: 1, nombre: 'Semanal' }, { id: 2, nombre: 'Quincenal' }, { id: 3, nombre: 'Mensual' }];
     fetch(`${API_URL}/api/plans`)
       .then(r => r.json())
-      .then(data => setPlans(Array.isArray(data) ? data : []))
-      .catch(() => setPlans([{ id: 1, nombre: 'Semanal' }, { id: 2, nombre: 'Quincenal' }, { id: 3, nombre: 'Mensual' }]));
+      .then(data => setPlans(Array.isArray(data) && data.length > 0 ? data : fallbackPlans))
+      .catch(() => setPlans(fallbackPlans));
 
     const socket = io(API_URL);
     socket.on("enroll_progress", (data) => {
@@ -208,9 +209,9 @@ export default function NuevaMembresia() {
               <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Plan de Acceso</label>
               <div className="relative">
                 <select value={planId} onChange={(e) => setPlanId(e.target.value)}
-                  className="w-full pl-9 pr-3 py-3 bg-background/50 border border-white/10 rounded-xl text-sm text-white focus:ring-2 focus:ring-red-500 outline-none transition-all appearance-none cursor-pointer">
+                  className="w-full pl-9 pr-3 py-3 bg-background/50 border border-white/10 rounded-xl text-sm text-white focus:ring-2 focus:ring-red-500 outline-none transition-all appearance-none cursor-pointer [color-scheme:dark]">
                   {plans.map(p => (
-                    <option key={p.id} value={p.id} className="bg-[#1a1a1a]">{p.nombre}</option>
+                    <option key={p.id} value={p.id}>{p.nombre}</option>
                   ))}
                 </select>
                 <Calendar className="absolute right-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
