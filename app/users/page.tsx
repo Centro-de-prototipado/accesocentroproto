@@ -336,8 +336,8 @@ function UsersContent() {
                 <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Cédula</th>
                 <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Contacto</th>
                 <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Huella</th>
-                <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden lg:table-cell">Inicio</th>
-                <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden lg:table-cell">Vence</th>
+                <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Inicio</th>
+                <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Vence</th>
                 <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Estado</th>
                 <th className="px-4 py-4 text-center text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Acción</th>
               </tr>
@@ -378,8 +378,8 @@ function UsersContent() {
                           <Fingerprint className="w-3 h-3" /> #{m.huella_id}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-muted-foreground text-xs hidden lg:table-cell">{formatDate(m.fecha_registro)}</td>
-                      <td className="px-4 py-4 text-muted-foreground text-xs hidden lg:table-cell">
+                      <td className="px-4 py-4 text-muted-foreground text-xs">{formatDate(m.fecha_registro)}</td>
+                      <td className="px-4 py-4 text-muted-foreground text-xs">
                         {getExpirationDate(m)}
                       </td>
                       <td className="px-4 py-4">

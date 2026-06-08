@@ -14,6 +14,8 @@ export default function NuevaMembresia() {
   const [telefono, setTelefono] = useState("");
   const [fechaRegistro, setFechaRegistro] = useState(new Date().toISOString().split('T')[0]);
   const [rol, setRol] = useState("miembro");
+  const [planId, setPlanId] = useState("3");
+  const [plans, setPlans] = useState<{id: number; nombre: string}[]>([]);
   const [huellaId, setHuellaId] = useState<number | null>(null);
   const [isSensorActive, setIsSensorActive] = useState(false);
   const [enrollStatus, setEnrollStatus] = useState<string>("Inactivo");
@@ -24,6 +26,11 @@ export default function NuevaMembresia() {
 
   useEffect(() => {
     if (!localStorage.getItem("adminToken")) { router.push("/admin/login"); return; }
+
+    fetch(`${API_URL}/api/plans`)
+      .then(r => r.json())
+      .then(data => setPlans(Array.isArray(data) ? data : []))
+      .catch(() => setPlans([{ id: 1, nombre: 'Semanal' }, { id: 2, nombre: 'Quincenal' }, { id: 3, nombre: 'Mensual' }]));
 
     const socket = io(API_URL);
     socket.on("enroll_progress", (data) => {
@@ -101,7 +108,7 @@ export default function NuevaMembresia() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ cedula, nombre, telefono, huella_id: huellaId, rol, fecha_registro: fechaRegistro }),
+        body: JSON.stringify({ cedula, nombre, telefono, huella_id: huellaId, rol, fecha_registro: fechaRegistro, plan_id: rol === 'miembro' ? Number(planId) : undefined }),
       });
       const data = await res.json();
       if (data.success) {
@@ -193,6 +200,22 @@ export default function NuevaMembresia() {
                 required />
             </div>
           </div>
+
+          {/* Plan selector */}
+          {rol === 'miembro' && (
+            <div className="space-y-2">
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Plan de Acceso</label>
+              <div className="relative">
+                <select value={planId} onChange={(e) => setPlanId(e.target.value)}
+                  className="w-full pl-9 pr-3 py-3 bg-background/50 border border-white/10 rounded-xl text-sm text-white focus:ring-2 focus:ring-red-500 outline-none transition-all appearance-none cursor-pointer">
+                  {plans.map(p => (
+                    <option key={p.id} value={p.id} className="bg-[#1a1a1a]">{p.nombre}</option>
+                  ))}
+                </select>
+                <Calendar className="absolute right-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+              </div>
+            </div>
+          )}
 
           <button type="submit" disabled={huellaId === null || isSensorActive || success}
             className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all ${
