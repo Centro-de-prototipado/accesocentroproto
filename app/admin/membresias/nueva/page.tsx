@@ -194,10 +194,11 @@ export default function NuevaMembresia() {
           <div className="space-y-2">
             <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Fecha de Ingreso</label>
             <div className="relative">
-              <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <input type="date" value={fechaRegistro} onChange={(e) => setFechaRegistro(e.target.value)}
+              <input id="fecha-ingreso" type="date" value={fechaRegistro} onChange={(e) => setFechaRegistro(e.target.value)}
+                onClick={(e) => { try { (e.target as HTMLInputElement).showPicker?.(); } catch {} }}
                 className="w-full pl-9 pr-3 py-3 bg-background/50 border border-white/10 rounded-xl text-sm text-white focus:ring-2 focus:ring-red-500 outline-none transition-all"
                 required />
+              <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
             </div>
           </div>
 
