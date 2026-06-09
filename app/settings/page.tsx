@@ -43,7 +43,7 @@ export default function SettingsPage() {
       const loginRes = await fetch(`${API_URL}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: "tntgym", password })
+        body: JSON.stringify({ username: "editnt", password })
       });
       const loginData = await loginRes.json();
       if (loginData.success) {

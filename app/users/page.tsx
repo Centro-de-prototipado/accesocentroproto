@@ -105,7 +105,7 @@ function UsersContent() {
       const loginRes = await fetch(`${API_URL}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: "tntgym", password: adminPass })
+        body: JSON.stringify({ username: "editnt", password: adminPass })
       });
       const loginData = await loginRes.json();
       if (!loginData.success) {
@@ -156,7 +156,7 @@ function UsersContent() {
         const loginRes = await fetch(`${API_URL}/api/admin/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: "tntgym", password })
+          body: JSON.stringify({ username: "editnt", password })
         });
         const loginData = await loginRes.json();
         if (loginData.success) {
@@ -423,7 +423,7 @@ function UsersContent() {
               <input 
                 type="text" 
                 name="username" 
-                value="tntgym" 
+                value="editnt" 
                 readOnly 
                 autoComplete="username" 
                 className="absolute opacity-0 pointer-events-none w-0 h-0" 
