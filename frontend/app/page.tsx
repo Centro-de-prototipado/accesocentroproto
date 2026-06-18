@@ -46,13 +46,14 @@ export default function Dashboard() {
   useEffect(() => {
     fetchStats();
     fetchTodayAccesses();
-
-    const socket = io(API_URL);
-    socket.on('access_event', (data: AccessEvent) => {
-      setEvents(prev => [data, ...prev]);
+ 
+    // Polling cada 3 segundos
+    const pollInterval = setInterval(() => {
       fetchStats();
-    });
-    return () => { socket.disconnect(); };
+      fetchTodayAccesses();
+    }, 3000);
+
+    return () => { clearInterval(pollInterval); };
   }, []);
 
   const openDoor = () =>

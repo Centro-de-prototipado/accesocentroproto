@@ -53,15 +53,11 @@ function UsersContent() {
   useEffect(() => { fetchUsers(); }, [searchParams]);
 
   useEffect(() => {
-    const socket = io(API_URL);
-    socket.on("member_deleted_confirm", (data: { id: number; huella_id: number }) => {
-      setUsers(prev => prev.filter(u => u.id !== data.id));
-      setDeletingIds(prev => { const s = new Set(prev); s.delete(data.id); return s; });
-      setMessage(`✅ Usuario #${data.huella_id} eliminado exitosamente.`);
-      setTimeout(() => setMessage(""), 5000);
-    });
-    return () => { socket.disconnect(); };
-  }, []);
+    const pollInterval = setInterval(() => {
+      fetchUsers();
+    }, 4000);
+    return () => clearInterval(pollInterval);
+  }, [searchParams]);
 
   const deleteUser = async (id: number) => {
     if (!confirm("¿Eliminar este usuario? Se enviará el comando al sensor y se esperará confirmación.")) return;
