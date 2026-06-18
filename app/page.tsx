@@ -56,10 +56,56 @@ export default function Dashboard() {
     return () => { clearInterval(pollInterval); };
   }, []);
 
-  const openDoor = () =>
-    fetch(`${API_URL}/api/devices/esp32c6_centro_01/open`, { method: 'POST' })
-      .then(() => alert('Comando enviado: Puerta Abierta'))
-      .catch(e => alert('Error: ' + e.message));
+  const openDoor = async () => {
+    let token = localStorage.getItem("adminToken");
+    if (!token) {
+      const username = prompt("Esta acción requiere privilegios de administrador. Ingresa tu usuario:");
+      if (!username) return;
+      const password = prompt("Ingresa tu contraseña:");
+      if (!password) return;
+
+      try {
+        const loginRes = await fetch(`${API_URL}/api/admin/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+        const loginData = await loginRes.json();
+        if (loginData.success) {
+          token = loginData.token;
+          localStorage.setItem("adminToken", token as string);
+        } else {
+          alert("Credenciales incorrectas");
+          return;
+        }
+      } catch {
+        alert("Error de conexión al autenticar");
+        return;
+      }
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/api/devices/esp32c6_centro_01/open`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Comando enviado: Puerta Abierta');
+      } else {
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem("adminToken");
+          alert("Sesión expirada o no autorizada. Inténtalo de nuevo.");
+        } else {
+          alert('Error: ' + data.error);
+        }
+      }
+    } catch (e: any) {
+      alert('Error de conexión: ' + e.message);
+    }
+  };
 
   return (
     <div className="space-y-10 animate-slide-up">
