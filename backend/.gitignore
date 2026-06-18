@@ -1,0 +1,6 @@
+.env
+node_modules/
+dev.db
+dev.db-journal
+prisma/migrations/
+exports/
