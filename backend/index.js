@@ -4,6 +4,8 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const mqtt = require('mqtt');
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const app = express();
@@ -17,6 +19,33 @@ const io = new Server(server, {
   transports: ['websocket', 'polling']
 });
 const prisma = new PrismaClient();
+
+// Estado temporal en memoria para enrolamiento (para soportar HTTP Polling)
+let currentEnrollStatus = {
+  estado: "Inactivo",
+  lectura: 0,
+  resultado: null,
+  huella_id: null,
+  timestamp: Date.now()
+};
+
+// Middleware de autenticación para administradores
+const authenticateAdmin = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Acceso denegado. Token no proporcionado.' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const secret = process.env.JWT_SECRET || 'secret-secreto-super-tnt-gym';
+    const decoded = jwt.verify(token, secret);
+    req.admin = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).json({ error: 'Token inválido o expirado.' });
+  }
+};
 
 app.use(cors());
 app.use(express.json());
@@ -74,6 +103,13 @@ mqttClient.on('message', async (topic, message) => {
         io.emit('device_status', payload);
 
       } else if (payload.estado === 'esperando_dedo') {
+        currentEnrollStatus = {
+          estado: "esperando_dedo",
+          lectura: payload.lectura || 1,
+          resultado: null,
+          huella_id: payload.huella_id || null,
+          timestamp: Date.now()
+        };
         io.emit('enroll_progress', payload);
 
       } else if (payload.cmd_ejecutado === 'abrir') {
@@ -91,12 +127,12 @@ mqttClient.on('message', async (topic, message) => {
         const memberId  = payload.miembro_id ? parseInt(payload.miembro_id) : null;
         const huellaId  = parseInt(payload.huella_id);
 
-        const member = await prisma.miembro.findFirst({
+        const member = await prisma.usuario.findFirst({
           where: memberId ? { id: memberId } : { huella_id: huellaId }
         });
 
         if (member) {
-          await prisma.miembroEliminado.create({
+          await prisma.usuarioEliminado.create({
             data: {
               cedula:         member.cedula,
               nombre:         member.nombre,
@@ -107,10 +143,10 @@ mqttClient.on('message', async (topic, message) => {
           });
 
           await prisma.huellaDisponible.create({ data: { huella_id: member.huella_id } });
-          await prisma.acceso.deleteMany({ where: { miembro_id: member.id } });
-          await prisma.miembro.delete({ where: { id: member.id } });
+          await prisma.acceso.deleteMany({ where: { usuario_id: member.id } });
+          await prisma.usuario.delete({ where: { id: member.id } });
 
-          console.log(`🗑️  Miembro ${member.nombre} eliminado tras confirmación del sensor.`);
+          console.log(`🗑️  Usuario ${member.nombre} eliminado tras confirmación del sensor.`);
           io.emit('member_deleted_confirm', { id: member.id, huella_id: member.huella_id });
         }
         return;
@@ -119,6 +155,13 @@ mqttClient.on('message', async (topic, message) => {
       // Resultados de enrolamiento
       if (['enrolado', 'timeout', 'error_coincidencia', 'error_guardado', 'memoria_llena'].includes(payload.resultado)) {
         console.log(`🔑 Resultado enrolamiento:`, payload.resultado);
+        currentEnrollStatus = {
+          estado: "completado",
+          lectura: 0,
+          resultado: payload.resultado === 'enrolado' ? 'exito' : payload.resultado,
+          huella_id: payload.huella_id,
+          timestamp: Date.now()
+        };
         io.emit('enroll_result', {
           resultado: payload.resultado === 'enrolado' ? 'exito' : payload.resultado,
           huella_id: payload.huella_id
@@ -131,7 +174,7 @@ mqttClient.on('message', async (topic, message) => {
       let member = null;
 
       if (payload.huella_id !== undefined && payload.huella_id !== null) {
-        member = await prisma.miembro.findUnique({
+        member = await prisma.usuario.findUnique({
           where:   { huella_id: parseInt(payload.huella_id) }
         });
 
@@ -153,26 +196,143 @@ mqttClient.on('message', async (topic, message) => {
 
       const log = await prisma.acceso.create({
         data: {
-          miembro_id:    member?.id || undefined,
+          usuario_id:    member?.id || undefined,
           resultado:     finalResult,
           confianza:     payload.confianza || 0,
           dispositivo_id: payload.dispositivo
         },
-        include: { miembro: true }
+        include: { usuario: true }
       });
 
-      console.log(`🔒 Acceso: ${log.miembro?.nombre || 'Desconocido'} → ${finalResult}`);
+      console.log(`🔒 Acceso: ${log.usuario?.nombre || 'Desconocido'} → ${finalResult}`);
       io.emit('access_event', log);
     }
 
     // ── Fallback: topic de enrolamiento antiguo
     else if (topic === 'centro/enrolamiento') {
       console.log(`📥 Enrolamiento (topic antiguo):`, payload);
+      currentEnrollStatus = {
+        estado: "completado",
+        lectura: 0,
+        resultado: payload.resultado === 'enrolado' ? 'exito' : payload.resultado,
+        huella_id: payload.huella_id,
+        timestamp: Date.now()
+      };
       io.emit('enroll_result', payload);
     }
 
   } catch (error) {
     console.error('❌ Error procesando MQTT:', error.message);
+  }
+});
+
+// Endpoint HTTP Webhook para que el ESP32 reporte accesos y estados sin MQTT en Serverless (Vercel)
+app.post('/api/webhook/acceso', async (req, res) => {
+  try {
+    const payload = req.body;
+    console.log(`📥 Webhook HTTP recibido:`, payload);
+
+    if (payload.online !== undefined) {
+      const dbDevice = await prisma.dispositivo.upsert({
+        where:  { id: payload.dispositivo },
+        update: { estado: payload.online ? 'online' : 'offline', ultimo_ping: new Date() },
+        create: { id: payload.dispositivo, nombre: payload.dispositivo, estado: payload.online ? 'online' : 'offline' }
+      });
+      return res.json({ success: true, device: dbDevice });
+    }
+
+    // Confirmación de borrado
+    if (payload.resultado === 'borrado' && (payload.miembro_id || payload.huella_id)) {
+      const memberId  = payload.miembro_id ? parseInt(payload.miembro_id) : null;
+      const huellaId  = parseInt(payload.huella_id);
+
+      const member = await prisma.usuario.findFirst({
+        where: memberId ? { id: memberId } : { huella_id: huellaId }
+      });
+
+      if (member) {
+        await prisma.usuarioEliminado.create({
+          data: {
+            cedula:         member.cedula,
+            nombre:         member.nombre,
+            huella_id:      member.huella_id,
+            telefono:       member.telefono,
+            fecha_eliminacion: new Date(),
+          }
+        });
+
+        await prisma.huellaDisponible.create({ data: { huella_id: member.huella_id } });
+        await prisma.acceso.deleteMany({ where: { usuario_id: member.id } });
+        await prisma.usuario.delete({ where: { id: member.id } });
+        console.log(`🗑️  Usuario ${member.nombre} eliminado por HTTP webhook.`);
+      }
+      return res.json({ success: true });
+    }
+
+    // Enrolamiento esperando dedo
+    if (payload.estado === 'esperando_dedo') {
+      currentEnrollStatus = {
+        estado: "esperando_dedo",
+        lectura: payload.lectura || 1,
+        resultado: null,
+        huella_id: payload.huella_id || null,
+        timestamp: Date.now()
+      };
+      return res.json({ success: true });
+    }
+
+    // Enrolamiento completado
+    if (['enrolado', 'timeout', 'error_coincidencia', 'error_guardado', 'memoria_llena'].includes(payload.resultado)) {
+      currentEnrollStatus = {
+        estado: "completado",
+        lectura: 0,
+        resultado: payload.resultado === 'enrolado' ? 'exito' : payload.resultado,
+        huella_id: payload.huella_id,
+        timestamp: Date.now()
+      };
+      return res.json({ success: true });
+    }
+
+    // Acceso normal
+    let finalResult = payload.resultado;
+    let member = null;
+
+    if (payload.huella_id !== undefined && payload.huella_id !== null) {
+      member = await prisma.usuario.findUnique({
+        where:   { huella_id: parseInt(payload.huella_id) }
+      });
+
+      if (member) {
+        if (member.estado === 'activo') finalResult = 'permitido';
+        else                            finalResult = 'denegado_inactivo';
+      } else {
+        if (finalResult === 'permitido') finalResult = 'denegado';
+      }
+    }
+
+    const dbDevice = await prisma.dispositivo.findUnique({ where: { id: payload.dispositivo } });
+    if (!dbDevice) {
+      await prisma.dispositivo.create({
+        data: { id: payload.dispositivo, nombre: payload.dispositivo, estado: 'online' }
+      });
+    }
+
+    const log = await prisma.acceso.create({
+      data: {
+        usuario_id:    member?.id || undefined,
+        resultado:     finalResult,
+        confianza:     payload.confianza || 0,
+        dispositivo_id: payload.dispositivo
+      },
+      include: { usuario: true }
+    });
+
+    console.log(`🔒 Acceso HTTP Webhook: ${log.usuario?.nombre || 'Desconocido'} → ${finalResult}`);
+    return res.json({ success: true, log });
+
+  } catch (error) {
+    console.error('❌ Error webhook HTTP:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -194,8 +354,8 @@ app.get('/api/stats', async (req, res) => {
       where: { timestamp: { gte: todayStart }, resultado: { in: ['denegado', 'denegado_inactivo'] } }
     });
 
-    const active = await prisma.miembro.count({ where: { estado: 'activo' } });
-    const inactivos = await prisma.miembro.count({ where: { estado: 'inactivo' } });
+    const active = await prisma.usuario.count({ where: { estado: 'activo' } });
+    const inactivos = await prisma.usuario.count({ where: { estado: 'inactivo' } });
 
     // Histograma por hora (hoy)
     const todayAccesses = await prisma.acceso.findMany({
@@ -237,7 +397,7 @@ app.get('/api/accesses/today', async (req, res) => {
 
     const accesses = await prisma.acceso.findMany({
       where: { timestamp: { gte: todayStart } },
-      include: { miembro: true },
+      include: { usuario: true },
       orderBy: { timestamp: 'desc' }
     });
     res.json(accesses);
@@ -247,15 +407,15 @@ app.get('/api/accesses/today', async (req, res) => {
 });
 
 // Abrir puerta de forma remota
-app.post('/api/devices/:id/open', (req, res) => {
+app.post('/api/devices/:id/open', authenticateAdmin, (req, res) => {
   const { id } = req.params;
   mqttClient.publish('centro/comando', JSON.stringify({ cmd: 'abrir', dispositivo: id }));
   console.log(`📤 Comando ABRIR enviado a: ${id}`);
   res.json({ success: true, message: 'Comando de apertura enviado.' });
 });
 
-// Lista de miembros con filtros
-app.get('/api/members', async (req, res) => {
+// Lista de usuarios con filtros
+app.get('/api/users', async (req, res) => {
   try {
     const { filter, hour } = req.query;
     let where = {};
@@ -278,17 +438,22 @@ app.get('/api/members', async (req, res) => {
         accessWhere.timestamp = { gte: hStart, lt: hEnd };
       }
 
-      const accesses  = await prisma.acceso.findMany({ where: accessWhere, select: { miembro_id: true } });
-      const memberIds = [...new Set(accesses.map(a => a.miembro_id).filter(id => id !== null))];
-      where = { id: { in: memberIds } };
+      const accesses  = await prisma.acceso.findMany({ where: accessWhere, select: { usuario_id: true } });
+      const userIds = [...new Set(accesses.map(a => a.usuario_id).filter(id => id !== null))];
+      where = { id: { in: userIds } };
     }
 
-    const members = await prisma.miembro.findMany({
+    const users = await prisma.usuario.findMany({
       where,
       orderBy: { nombre: 'asc' }
     });
-    res.json(members);
+    res.json(users);
   } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// Compatibilidad con frontend (redireccionar /api/members a /api/users)
+app.get('/api/members', async (req, res) => {
+  res.redirect(307, '/api/users' + (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''));
 });
 
 // Login de administrador
@@ -296,23 +461,55 @@ app.post('/api/admin/login', async (req, res) => {
   const { username, password } = req.body;
   try {
     const admin = await prisma.admin.findUnique({ where: { username } });
-    if (admin && admin.password === password) {
-      return res.json({ success: true, token: 'local-admin-token' });
-    }
-    // Credenciales de fallback hardcoded
-    if (username === 'editnt' && password === '1727gym') {
-      return res.json({ success: true, token: 'local-admin-token' });
+    if (admin) {
+      const passwordMatch = await bcrypt.compare(password, admin.password);
+      if (passwordMatch) {
+        const token = jwt.sign(
+          { id: admin.id, username: admin.username },
+          process.env.JWT_SECRET || 'secret-secreto-super-tnt-gym',
+          { expiresIn: '24h' }
+        );
+
+        // Guardar hora de ingreso en Supabase
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+        const dispositivo = req.headers['user-agent'] || null;
+        await prisma.sesionAdmin.create({
+          data: {
+            admin_id:    admin.id,
+            username:    admin.username,
+            hora_inicio: new Date(),
+            ip:          typeof ip === 'string' ? ip.split(',')[0].trim() : null,
+            dispositivo: dispositivo ? dispositivo.substring(0, 200) : null
+          }
+        });
+
+        console.log(`✅ Inicio de sesión: ${admin.username} desde IP: ${ip}`);
+        return res.json({ success: true, token });
+      }
     }
     res.status(401).json({ error: 'Credenciales inválidas' });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Crear personal
-app.post('/api/members', async (req, res) => {
+// Historial de sesiones de administrador
+app.get('/api/admin/sessions', authenticateAdmin, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const sesiones = await prisma.sesionAdmin.findMany({
+      orderBy: { hora_inicio: 'desc' },
+      take: limit,
+      include: { admin: { select: { username: true } } }
+    });
+    res.json(sesiones);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// Crear usuario
+app.post('/api/users', authenticateAdmin, async (req, res) => {
   try {
     const { cedula, nombre, telefono, huella_id } = req.body;
 
-    const nuevoMiembro = await prisma.miembro.create({
+    const nuevoUsuario = await prisma.usuario.create({
       data: {
         cedula,
         nombre,
@@ -322,12 +519,19 @@ app.post('/api/members', async (req, res) => {
         rol:       'empleado'
       }
     });
-    res.json({ success: true, member: nuevoMiembro });
+    // Limpiar estado de enrolamiento al terminar de guardar
+    currentEnrollStatus = { estado: "Inactivo", lectura: 0, resultado: null, huella_id: null, timestamp: Date.now() };
+    res.json({ success: true, user: nuevoUsuario });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
+// Endpoint para consultar progreso de enrolamiento via HTTP Polling
+app.get('/api/admin/enroll-status', authenticateAdmin, (req, res) => {
+  res.json(currentEnrollStatus);
+});
+
 // Enviar comando de enrolamiento al ESP32
-app.post('/api/devices/:id/enroll', (req, res) => {
+app.post('/api/devices/:id/enroll', authenticateAdmin, (req, res) => {
   const { id } = req.params;
   const { huella_id } = req.body;
   mqttClient.publish('centro/comando', JSON.stringify({
@@ -341,31 +545,53 @@ app.post('/api/devices/:id/enroll', (req, res) => {
 
 
 
-// Eliminar miembro (envía comando MQTT al sensor, espera confirmación)
-app.delete('/api/members/:id', async (req, res) => {
+// Eliminar usuario (envía comando MQTT al sensor, espera confirmación)
+app.delete('/api/users/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const member = await prisma.miembro.findUnique({ where: { id: parseInt(id) } });
-    if (!member) return res.status(404).json({ error: 'Miembro no encontrado' });
+    const user = await prisma.usuario.findUnique({ where: { id: parseInt(id) } });
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
     mqttClient.publish('centro/comando', JSON.stringify({
       cmd:        'borrar',
-      huella_id:  member.huella_id,
-      miembro_id: member.id
+      huella_id:  user.huella_id,
+      miembro_id: user.id
     }));
 
-    console.log(`📤 Comando BORRAR enviado: ${member.nombre} (huella #${member.huella_id})`);
+    console.log(`📤 Comando BORRAR enviado: ${user.nombre} (huella #${user.huella_id})`);
     res.json({ success: true, message: 'Comando de borrado enviado al sensor. Esperando confirmación...' });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
+// Compatibilidad con frontend (redireccionar DELETE /api/members/:id a DELETE /api/users/:id)
+app.delete('/api/members/:id', authenticateAdmin, async (req, res) => {
+  res.redirect(307, `/api/users/${req.params.id}`);
+});
+
+// Renovación de usuario
+app.post('/api/users/:id/renew', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updated = await prisma.usuario.update({
+      where: { id: parseInt(id) },
+      data: { estado: 'activo', fecha_registro: new Date() }
+    });
+    res.json({ success: true, user: updated });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// Compatibilidad con frontend (redireccionar POST /api/members/:id/renew a POST /api/users/:id/renew)
+app.post('/api/members/:id/renew', authenticateAdmin, async (req, res) => {
+  res.redirect(307, `/api/users/${req.params.id}/renew`);
+});
+
 // Limpieza semanal + exportación (simulada localmente)
-app.post('/api/cleanup', async (req, res) => {
+app.post('/api/cleanup', authenticateAdmin, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email requerido' });
 
-    const allLogs = await prisma.acceso.findMany({ include: { miembro: true } });
+    const allLogs = await prisma.acceso.findMany({ include: { usuario: true } });
     console.log(`📧 [SIMULADO] Exportando ${allLogs.length} registros a: ${email}`);
 
     await prisma.acceso.deleteMany({});
@@ -376,19 +602,19 @@ app.post('/api/cleanup', async (req, res) => {
 });
 
 // Siguiente ID de huella disponible (reciclado o nuevo)
-app.get('/api/next-huella-id', async (req, res) => {
+app.get('/api/next-huella-id', authenticateAdmin, async (req, res) => {
   try {
     const recycled = await prisma.huellaDisponible.findFirst({ orderBy: { huella_id: 'asc' } });
     if (recycled) {
       return res.json({ huella_id: recycled.huella_id, recycled: true });
     }
-    const maxMember = await prisma.miembro.findFirst({ orderBy: { huella_id: 'desc' } });
-    res.json({ huella_id: (maxMember?.huella_id || 0) + 1, recycled: false });
+    const maxUser = await prisma.usuario.findFirst({ orderBy: { huella_id: 'desc' } });
+    res.json({ huella_id: (maxUser?.huella_id || 0) + 1, recycled: false });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
 // Consumir un huella_id reciclado después del enrolamiento exitoso
-app.delete('/api/free-huella/:huellaId', async (req, res) => {
+app.delete('/api/free-huella/:huellaId', authenticateAdmin, async (req, res) => {
   try {
     const huellaId = parseInt(req.params.huellaId);
     await prisma.huellaDisponible.deleteMany({ where: { huella_id: huellaId } });
@@ -409,7 +635,7 @@ app.get('/api/accesses/export', async (req, res) => {
     const beforeDate = new Date(before);
     const accesses = await prisma.acceso.findMany({
       where: { timestamp: { lt: beforeDate } },
-      include: { miembro: true },
+      include: { usuario: true },
       orderBy: { timestamp: 'desc' }
     });
 
@@ -420,7 +646,7 @@ app.get('/api/accesses/export', async (req, res) => {
 });
 
 // Limpiar accesos anteriores a una fecha
-app.post('/api/accesses/cleanup', async (req, res) => {
+app.post('/api/accesses/cleanup', authenticateAdmin, async (req, res) => {
   try {
     const { before } = req.body;
     if (!before) return res.status(400).json({ error: 'Parámetro before requerido' });
@@ -438,7 +664,7 @@ app.post('/api/accesses/cleanup', async (req, res) => {
 });
 
 // Subida simulada a Google Drive (genera un enlace de descarga local)
-app.post('/api/accesses/upload-drive', async (req, res) => {
+app.post('/api/accesses/upload-drive', authenticateAdmin, async (req, res) => {
   try {
     const { csv, filename } = req.body;
     if (!csv) return res.status(400).json({ error: 'CSV requerido' });

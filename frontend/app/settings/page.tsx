@@ -127,13 +127,13 @@ export default function SettingsPage() {
 
     try {
       const { fecha_registro, plan_id, ...rest } = formData;
-      const memberRes = await fetch(`${API_URL}/api/members`, {
+      const userRes = await fetch(`${API_URL}/api/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...rest, fecha_registro, plan_id: Number(plan_id) }),
+        body: JSON.stringify({ ...rest, huella_id: parseInt(rest.huella_id) }),
       });
 
-      if (!memberRes.ok) throw new Error('Error al guardar datos del usuario');
+      if (!userRes.ok) throw new Error('Error al guardar datos del usuario');
 
       setStatus({ type: 'success', message: '¡Usuario registrado exitosamente en la base de datos!' });
       resetForm();

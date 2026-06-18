@@ -3,6 +3,7 @@
  * Ejecutar: node seed.js
  */
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const prisma = new PrismaClient();
@@ -11,12 +12,13 @@ async function main() {
   console.log('🌱 Iniciando seed de base de datos...');
 
     // Admin por defecto
+    const hashedPassword = await bcrypt.hash('acceso_centro', 10);
     await prisma.admin.upsert({
-      where: { username: 'editnt' },
-      update: { password: '1727gym' },
-      create: { username: 'editnt', password: '1727gym' }
+      where: { username: 'centro' },
+      update: { password: hashedPassword },
+      create: { username: 'centro', password: hashedPassword }
     });
-    console.log('✅ Admin creado: editnt / 1727gym');
+    console.log('✅ Admin creado: centro / acceso_centro (encriptado)');
 
 
 
@@ -35,7 +37,7 @@ async function main() {
 
   console.log('');
   console.log('🎉 Seed completado exitosamente.');
-  console.log('   Usuario admin: editnt | Contraseña: 1727gym');
+  console.log('   Usuario admin: centro | Contraseña: acceso_centro');
 }
 
 main()

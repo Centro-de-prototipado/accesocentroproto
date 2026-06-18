@@ -12,7 +12,7 @@ type AccessEvent = {
   confianza: number;
   timestamp: string;
   dispositivo_id: string;
-  miembro?: { nombre: string; huella_id: number };
+  usuario?: { nombre: string; huella_id: number };
 };
 
 type WeeklyData = { day: string; date: string; count: number };
@@ -160,7 +160,7 @@ export default function Dashboard() {
                             </div>
                             <div>
                               <h4 className="text-lg font-bold text-white flex items-center gap-2">
-                                {ev.miembro?.nombre || 'Persona Desconocida'}
+                                {ev.usuario?.nombre || 'Persona Desconocida'}
                                 {isPermitido && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
                               </h4>
                               <div className="flex items-center gap-3 mt-1">
@@ -171,7 +171,7 @@ export default function Dashboard() {
                                 </span>
                                 <span className="text-slate-500 text-[10px] font-bold flex items-center gap-1">
                                     <Clock size={10} />
-                                    ID: {ev.miembro?.huella_id || '???'}
+                                    ID: {ev.usuario?.huella_id || '???'}
                                 </span>
                               </div>
                             </div>

@@ -33,32 +33,47 @@ export default function NuevaMembresia() {
       .then(data => setPlans(Array.isArray(data) && data.length > 0 ? data : fallbackPlans))
       .catch(() => setPlans(fallbackPlans));
 
-    const socket = io(API_URL);
-    socket.on("enroll_progress", (data) => {
-      setIsSensorActive(true);
-      if (data.lectura === 1) setEnrollStatus("Mantén el dedo firme sobre el sensor...");
-      if (data.lectura === 2) setEnrollStatus("Retira el dedo y vuelve a colocarlo para verificar.");
-    });
-    socket.on("enroll_result", (data) => {
-      if (data.resultado === "exito") {
-        setHuellaId(data.huella_id);
-        setIsSensorActive(false);
-        setEnrollStatus("Completado");
-        setError("");
-      } else {
-        setIsSensorActive(false);
-        setEnrollStatus("Inactivo");
-        const errors: Record<string, string> = {
-          timeout: "Tiempo agotado. El sensor no detectó el dedo.",
-          error_coincidencia: "Las dos lecturas no coinciden. Intenta de nuevo.",
-          error_guardado: "Error interno guardando la huella en el sensor.",
-          memoria_llena: "La memoria del sensor está llena.",
-        };
-        setError(errors[data.resultado] || "Error desconocido en el sensor.");
-      }
-    });
-    return () => { socket.disconnect(); };
-  }, [router]);
+    let pollInterval: any;
+
+    if (isSensorActive) {
+      pollInterval = setInterval(async () => {
+        try {
+          const token = localStorage.getItem("adminToken");
+          const res = await fetch(`${API_URL}/api/admin/enroll-status`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.estado === "esperando_dedo") {
+              if (data.lectura === 1) setEnrollStatus("Mantén el dedo firme sobre el sensor...");
+              if (data.lectura === 2) setEnrollStatus("Retira el dedo y vuelve a colocarlo para verificar.");
+            } else if (data.estado === "completado" && data.resultado) {
+              if (data.resultado === "exito") {
+                setHuellaId(data.huella_id);
+                setIsSensorActive(false);
+                setEnrollStatus("Completado");
+                setError("");
+              } else {
+                setIsSensorActive(false);
+                setEnrollStatus("Inactivo");
+                const errors: Record<string, string> = {
+                  timeout: "Tiempo agotado. El sensor no detectó el dedo.",
+                  error_coincidencia: "Las dos lecturas no coinciden. Intenta de nuevo.",
+                  error_guardado: "Error interno guardando la huella en el sensor.",
+                  memoria_llena: "La memoria del sensor está llena.",
+                };
+                setError(errors[data.resultado] || "Error desconocido en el sensor.");
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error polling enroll status:", err);
+        }
+      }, 2000);
+    }
+
+    return () => { if (pollInterval) clearInterval(pollInterval); };
+  }, [router, isSensorActive]);
 
   const capturarHuella = async () => {
     setError(""); setHuellaId(null); setIsSensorActive(true);

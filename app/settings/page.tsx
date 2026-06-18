@@ -31,26 +31,39 @@ export default function SettingsPage() {
   const [isCleaningExpired, setIsCleaningExpired] = useState(false);
   const [expiredResult, setExpiredResult] = useState<number | null>(null);
   const [expiredError, setExpiredError] = useState("");
+  const [sessions, setSessions] = useState<any[]>([]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("adminToken");
+    if (token) {
+      setIsAuthenticated(true);
+      loadMembers();
+      loadSessions(token);
+    }
+  }, []);
 
   const getAdminToken = async (): Promise<string | null> => {
     let token = localStorage.getItem("adminToken");
     if (token) return token;
 
-    const password = prompt("Esta acción requiere privilegios de administrador. Ingresa la contraseña:");
+    const username = prompt("Esta acción requiere privilegios de administrador. Ingresa tu usuario:");
+    if (!username) return null;
+
+    const password = prompt("Ingresa tu contraseña:");
     if (!password) return null;
 
     try {
       const loginRes = await fetch(`${API_URL}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: "editnt", password })
+        body: JSON.stringify({ username, password })
       });
       const loginData = await loginRes.json();
       if (loginData.success) {
         localStorage.setItem("adminToken", loginData.token);
         return loginData.token;
       } else {
-        alert("Contraseña incorrecta");
+        alert("Credenciales incorrectas");
         return null;
       }
     } catch {
@@ -117,6 +130,15 @@ export default function SettingsPage() {
       .catch(console.error);
   };
 
+  const loadSessions = (token: string) => {
+    fetch(`${API_URL}/api/admin/sessions`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then((res) => res.json())
+      .then((data) => setSessions(Array.isArray(data) ? data : []))
+      .catch(console.error);
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
@@ -131,6 +153,7 @@ export default function SettingsPage() {
         localStorage.setItem("adminToken", data.token);
         setIsAuthenticated(true);
         loadMembers();
+        loadSessions(data.token);
       } else {
         setLoginError(data.error || "Credenciales inválidas");
       }
@@ -414,6 +437,38 @@ export default function SettingsPage() {
               <p className="text-xl font-black text-white">{item.value}</p>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Historial de Inicios de Sesión de Administradores */}
+      <div className="glass rounded-2xl p-6 animate-tnt-slide-up stagger-4">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-600 to-orange-500 flex items-center justify-center">
+            <ShieldCheck className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white">Historial de Accesos de Administradores</h3>
+            <p className="text-[10px] text-muted-foreground">Registro de inicios de sesión de administradores (guardado en Supabase)</p>
+          </div>
+        </div>
+        <div className="max-h-60 overflow-y-auto space-y-2">
+          {sessions.length === 0 ? (
+            <p className="text-muted-foreground text-xs text-center py-4">No hay registros de sesión</p>
+          ) : (
+            sessions.map((session, idx) => (
+              <div key={session.id} className="flex justify-between items-center p-3 rounded-xl bg-white/[0.02] border border-white/5 text-xs text-white">
+                <div>
+                  <span className="font-bold text-red-400">{session.username}</span>
+                  <span className="text-muted-foreground text-[10px] ml-2">IP: {session.ip || 'desconocida'}</span>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-xs sm:max-w-md">{session.dispositivo || 'Dispositivo desconocido'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold">{new Date(session.hora_inicio).toLocaleTimeString()}</p>
+                  <p className="text-[10px] text-muted-foreground">{new Date(session.hora_inicio).toLocaleDateString('es-CO')}</p>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

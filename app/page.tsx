@@ -13,7 +13,7 @@ type AccessEvent = {
   confianza: number;
   timestamp: string;
   dispositivo_id: string;
-  miembro?: { nombre: string; huella_id: number };
+  usuario?: { nombre: string; huella_id: number };
 };
 
 type WeeklyData = { day: string; date: string; count: number };
@@ -108,13 +108,13 @@ function EventCard({ ev, index }: { ev: AccessEvent; index: number }) {
           </div>
           <div>
             <p className="font-bold text-white flex items-center gap-2 text-sm">
-              {ev.miembro?.nombre || 'Huella Desconocida'}
+              {ev.usuario?.nombre || 'Huella Desconocida'}
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${cfg.badgeColor}`}>
                 {cfg.badge}
               </span>
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              ID: {ev.miembro?.huella_id || '?'} · Confianza: {ev.confianza}%
+              ID: {ev.usuario?.huella_id || '?'} · Confianza: {ev.confianza}%
             </p>
           </div>
         </div>
@@ -153,25 +153,34 @@ export default function Dashboard() {
     setMounted(true);
     localStorage.removeItem("adminToken");
 
-    const socket = io(API_URL);
-    socket.on('access_event', (data: AccessEvent) => {
-      setEvents((prev) => [data, ...prev].slice(0, 15));
-    });
-    socket.on('members_auto_deleted', () => {
-      fetch(`${API_URL}/api/stats`).then(r => r.json()).then(d => setStats(prev => ({ ...prev, ...d })));
-    });
+    const loadStatsAndEvents = async () => {
+      try {
+        const statsRes = await fetch(`${API_URL}/api/stats`);
+        if (statsRes.ok) {
+          const data = await statsRes.json();
+          setStats(prev => ({ ...prev, ...data }));
+        }
 
-    fetch(`${API_URL}/api/stats`)
-      .then(res => {
-        if (!res.ok) throw new Error("Error loading stats");
-        return res.json();
-      })
-      .then(data => setStats(prev => ({ ...prev, ...data })))
-      .catch(err => console.error("Could not load stats.", err));
+        const eventsRes = await fetch(`${API_URL}/api/accesses/today`);
+        if (eventsRes.ok) {
+          const eventsData = await eventsRes.json();
+          setEvents(Array.isArray(eventsData) ? eventsData.slice(0, 15) : []);
+        }
+      } catch (err) {
+        console.error("Error fetching stats or events:", err);
+      }
+    };
 
+    loadStatsAndEvents();
+    
+    // Polling cada 3 segundos
+    const pollInterval = setInterval(loadStatsAndEvents, 3000);
     const timeInterval = setInterval(() => setCurrentTime(new Date()), 1000);
 
-    return () => { socket.disconnect(); clearInterval(timeInterval); };
+    return () => {
+      clearInterval(pollInterval);
+      clearInterval(timeInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -193,21 +202,24 @@ export default function Dashboard() {
     let token = localStorage.getItem("adminToken");
     if (token) return token;
 
-    const password = prompt("Esta acción requiere privilegios de administrador. Ingresa la contraseña:");
+    const username = prompt("Esta acción requiere privilegios de administrador. Ingresa tu usuario:");
+    if (!username) return null;
+
+    const password = prompt("Ingresa tu contraseña:");
     if (!password) return null;
 
     try {
       const loginRes = await fetch(`${API_URL}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: "editnt", password })
+        body: JSON.stringify({ username, password })
       });
       const loginData = await loginRes.json();
       if (loginData.success) {
         localStorage.setItem("adminToken", loginData.token);
         return loginData.token;
       } else {
-        alert("Contraseña incorrecta");
+        alert("Credenciales incorrectas");
         return null;
       }
     } catch {

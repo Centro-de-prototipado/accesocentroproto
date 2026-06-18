@@ -11,7 +11,7 @@ type AccessLog = {
   confianza: number;
   timestamp: string;
   dispositivo_id: string;
-  miembro?: { nombre: string; huella_id: number; id: number } | null;
+  usuario?: { nombre: string; huella_id: number; id: number } | null;
   dispositivo?: { nombre: string };
 };
 
@@ -61,16 +61,16 @@ function LogCard({ log, index }: { log: AccessLog; index: number }) {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-bold text-white text-sm truncate">
-                {log.miembro?.nombre || 'Huella Desconocida'}
+                {log.usuario?.nombre || 'Huella Desconocida'}
               </p>
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${cfg.badgeColor} shrink-0`}>
                 {cfg.badge}
               </span>
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
-              {log.miembro && (
+              {log.usuario && (
                 <span className="flex items-center gap-1">
-                  <Fingerprint className="w-3 h-3" /> #{log.miembro.huella_id}
+                  <Fingerprint className="w-3 h-3" /> #{log.usuario.huella_id}
                 </span>
               )}
               <span>Confianza: {log.confianza}%</span>
@@ -118,8 +118,8 @@ export default function LogsPage() {
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
           filtered = filtered.filter((l: AccessLog) =>
-            l.miembro?.nombre?.toLowerCase().includes(q) ||
-            l.miembro?.huella_id?.toString().includes(q)
+            l.usuario?.nombre?.toLowerCase().includes(q) ||
+            l.usuario?.huella_id?.toString().includes(q)
           );
         }
         setLogs(filtered);
@@ -157,8 +157,8 @@ export default function LogsPage() {
     if (filterResult !== 'all' && l.resultado !== filterResult) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return l.miembro?.nombre?.toLowerCase().includes(q) ||
-        l.miembro?.huella_id?.toString().includes(q);
+      return l.usuario?.nombre?.toLowerCase().includes(q) ||
+        l.usuario?.huella_id?.toString().includes(q);
     }
     return true;
   });
@@ -166,8 +166,8 @@ export default function LogsPage() {
   const handleExport = () => {
     const exportData = filteredLogs.map(l => ({
       fecha: new Date(l.timestamp).toLocaleString('es-CO'),
-      miembro: l.miembro?.nombre || 'Desconocido',
-      huella_id: l.miembro?.huella_id || '-',
+      usuario: l.usuario?.nombre || 'Desconocido',
+      huella_id: l.usuario?.huella_id || '-',
       resultado: l.resultado,
       confianza: l.confianza,
       dispositivo: l.dispositivo_id,

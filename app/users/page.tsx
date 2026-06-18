@@ -46,6 +46,7 @@ function UsersContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<'regulares' | 'vip' | 'morosos'>('regulares');
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminUser, setAdminUser] = useState("");
   const [adminPass, setAdminPass] = useState("");
   const [adminError, setAdminError] = useState("");
 
@@ -69,15 +70,11 @@ function UsersContent() {
   useEffect(() => { fetchMembers(); }, [searchParams]);
 
   useEffect(() => {
-    const socket = io(API_URL);
-    socket.on('member_deleted_confirm', (data: { id: number, huella_id: number }) => {
-      setMembers((prev) => prev.filter(m => m.id !== data.id));
-      setDeletingIds((prev) => { const next = new Set(prev); next.delete(data.id); return next; });
-      setMessage(`Usuario #${data.huella_id} eliminado (confirmado por sensor).`);
-      setTimeout(() => setMessage(""), 5000);
-    });
-    return () => { socket.disconnect(); };
-  }, []);
+    const pollInterval = setInterval(() => {
+      fetchMembers();
+    }, 4000);
+    return () => clearInterval(pollInterval);
+  }, [searchParams]);
 
   const toggleSelect = (id: number) => {
     setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -95,21 +92,26 @@ function UsersContent() {
   const handleRenewClick = () => {
     if (selected.size === 0) return;
     setShowAdminModal(true);
+    setAdminUser("");
     setAdminPass("");
     setAdminError("");
   };
 
   const confirmRenewal = async () => {
     setAdminError("");
+    if (!adminUser || !adminPass) {
+      setAdminError("Ingresa usuario y contraseña");
+      return;
+    }
     try {
       const loginRes = await fetch(`${API_URL}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: "editnt", password: adminPass })
+        body: JSON.stringify({ username: adminUser, password: adminPass })
       });
       const loginData = await loginRes.json();
       if (!loginData.success) {
-        setAdminError(loginData.error || "Contraseña incorrecta");
+        setAdminError(loginData.error || "Credenciales incorrectas");
         return;
       }
 
@@ -147,7 +149,12 @@ function UsersContent() {
     
     let token = localStorage.getItem("adminToken");
     if (!token) {
-      const password = prompt("Esta acción requiere privilegios de administrador. Ingresa la contraseña:");
+      const username = prompt("Esta acción requiere privilegios de administrador. Ingresa tu usuario:");
+      if (!username) {
+        setDeletingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+        return;
+      }
+      const password = prompt("Ingresa tu contraseña:");
       if (!password) {
         setDeletingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
         return;
@@ -156,14 +163,14 @@ function UsersContent() {
         const loginRes = await fetch(`${API_URL}/api/admin/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: "editnt", password })
+          body: JSON.stringify({ username, password })
         });
         const loginData = await loginRes.json();
         if (loginData.success) {
           token = loginData.token;
           localStorage.setItem("adminToken", token as string);
         } else {
-          alert("Contraseña incorrecta");
+          alert("Credenciales incorrectas");
           setDeletingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
           return;
         }
@@ -416,22 +423,14 @@ function UsersContent() {
               </button>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
-              Ingresa la contraseña de administrador para renovar {selected.size} usuario(s).
+              Ingresa usuario y contraseña de administrador para renovar {selected.size} usuario(s).
             </p>
             <div className="space-y-4">
-              {/* Campo oculto de usuario para prevenir que el autorrelleno del navegador altere el buscador */}
-              <input 
-                type="text" 
-                name="username" 
-                value="editnt" 
-                readOnly 
-                autoComplete="username" 
-                className="absolute opacity-0 pointer-events-none w-0 h-0" 
-                tabIndex={-1} 
-              />
-              <input type="password" value={adminPass} onChange={(e) => setAdminPass(e.target.value)} autoFocus
+              <input type="text" value={adminUser} onChange={(e) => setAdminUser(e.target.value)} autoFocus
+                placeholder="Usuario"
+                className="w-full px-4 py-3 bg-background/50 border border-white/10 rounded-xl text-sm text-white placeholder-muted-foreground focus:ring-2 focus:ring-red-500 outline-none transition-all" />
+              <input type="password" value={adminPass} onChange={(e) => setAdminPass(e.target.value)}
                 placeholder="••••••••"
-                autoComplete="current-password"
                 className="w-full px-4 py-3 bg-background/50 border border-white/10 rounded-xl text-lg tracking-widest text-white placeholder-muted-foreground focus:ring-2 focus:ring-red-500 outline-none transition-all"
                 onKeyDown={(e) => e.key === 'Enter' && confirmRenewal()} />
               {adminError && <p className="text-xs text-red-400 font-medium">{adminError}</p>}

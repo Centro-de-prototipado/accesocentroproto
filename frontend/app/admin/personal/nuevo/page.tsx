@@ -7,7 +7,7 @@ import { io } from "socket.io-client";
 import Link from "next/link";
 import { API_URL } from "@/lib/config";
 
-const DEVICE_ID = "esp32c6_gimnasio_01";
+const DEVICE_ID = "esp32c6_centro_01";
 
 export default function NuevoPersonal() {
   const router = useRouter();
@@ -91,9 +91,9 @@ export default function NuevoPersonal() {
     e.preventDefault();
     if (huellaId === null) { setError("Debes capturar la huella antes de guardar."); return; }
     try {
-      const res  = await fetch(`${API_URL}/api/members`, {
+      const res  = await fetch(`${API_URL}/api/users`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cedula, nombre, telefono, huella_id: huellaId, fecha_registro: fechaRegistro, plan_id: Number(planId) }),
+        body: JSON.stringify({ cedula, nombre, telefono, huella_id: huellaId }),
       });
       const data = await res.json();
       if (data.success) {
