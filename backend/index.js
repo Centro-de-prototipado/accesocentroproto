@@ -71,6 +71,27 @@ console.log(`📡 Intentando conectar a MQTT: ${brokerUrl} con usuario: ${mqttOp
 
 const mqttClient = mqtt.connect(brokerUrl, mqttOptions);
 
+const publishMqtt = (topic, payload) => {
+  return new Promise((resolve) => {
+    if (mqttClient.connected) {
+      mqttClient.publish(topic, payload, { qos: 1 }, (err) => {
+        resolve();
+      });
+    } else {
+      const onConnect = () => {
+        mqttClient.publish(topic, payload, { qos: 1 }, (err) => {
+          resolve();
+        });
+      };
+      mqttClient.once('connect', onConnect);
+      setTimeout(() => {
+        mqttClient.off('connect', onConnect);
+        resolve();
+      }, 3000);
+    }
+  });
+};
+
 mqttClient.on('error', (err) => {
   console.error('💥 MQTT Error:', err.message);
 });
@@ -408,9 +429,9 @@ app.get('/api/accesses/today', async (req, res) => {
 });
 
 // Abrir puerta de forma remota
-app.post('/api/devices/:id/open', authenticateAdmin, (req, res) => {
+app.post('/api/devices/:id/open', authenticateAdmin, async (req, res) => {
   const { id } = req.params;
-  mqttClient.publish('centro/comando', JSON.stringify({ cmd: 'abrir', dispositivo: id }));
+  await publishMqtt('centro/comando', JSON.stringify({ cmd: 'abrir', dispositivo: id }));
   console.log(`📤 Comando ABRIR enviado a: ${id}`);
   res.json({ success: true, message: 'Comando de apertura enviado.' });
 });
@@ -563,10 +584,10 @@ app.get('/api/admin/enroll-status', authenticateAdmin, (req, res) => {
 });
 
 // Enviar comando de enrolamiento al ESP32
-app.post('/api/devices/:id/enroll', authenticateAdmin, (req, res) => {
+app.post('/api/devices/:id/enroll', authenticateAdmin, async (req, res) => {
   const { id } = req.params;
   const { huella_id } = req.body;
-  mqttClient.publish('centro/comando', JSON.stringify({
+  await publishMqtt('centro/comando', JSON.stringify({
     cmd:       'enrolar',
     huella_id: parseInt(huella_id),
     dispositivo: id
@@ -589,7 +610,7 @@ app.delete('/api/users/:id', authenticateAdmin, async (req, res) => {
     const user = await prisma.usuario.findUnique({ where: { id: parseInt(id) } });
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-    mqttClient.publish('centro/comando', JSON.stringify({
+    await publishMqtt('centro/comando', JSON.stringify({
       cmd:        'borrar',
       huella_id:  user.huella_id,
       miembro_id: user.id
@@ -732,15 +753,19 @@ app.get('/api/health', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────
-// 4. Iniciar servidor
+// 4. Iniciar servidor o exportar para Vercel
 // ─────────────────────────────────────────────────────
-const PORT = process.env.PORT || 4000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log('');
-  console.log('═══════════════════════════════════════════════');
-  console.log(`🚀 Servidor activo en: http://localhost:${PORT}`);
-  console.log(`📡 MQTT Broker:        ${brokerUrl}`);
-  console.log(`🗃️  Base de datos:      SQLite (local)`);
-  console.log('═══════════════════════════════════════════════');
-  console.log('');
-});
+if (require.main === module) {
+  const PORT = process.env.PORT || 4000;
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log('');
+    console.log('═══════════════════════════════════════════════');
+    console.log(`🚀 Servidor activo en: http://localhost:${PORT}`);
+    console.log(`📡 MQTT Broker:        ${brokerUrl}`);
+    console.log(`🗃️  Base de datos:      PostgreSQL / Supabase`);
+    console.log('═══════════════════════════════════════════════');
+    console.log('');
+  });
+}
+
+module.exports = app;
