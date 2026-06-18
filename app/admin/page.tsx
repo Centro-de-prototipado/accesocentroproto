@@ -9,7 +9,7 @@ const DEVICE_ID = "esp32c6_centro_01";
 
 type EnrollStep = 'idle' | 'obtener_id' | 'despertar_sensor' | 'primera_lectura' | 'segunda_lectura' | 'completado' | 'error';
 
-export default function SettingsPage() {
+export default function AdminPage() {
   type Plan = { id: number; nombre: string };
   const [formData, setFormData] = useState({ nombre: '', cedula: '', telefono: '', huella_id: '', fecha_registro: new Date().toISOString().split('T')[0], plan_id: '3' });
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -90,7 +90,9 @@ export default function SettingsPage() {
     }
 
     return () => { if (pollInterval) clearInterval(pollInterval); };
-  }, [enrollStep]);  const capturarHuella = async () => {
+  }, [enrollStep]);
+
+  const capturarHuella = async () => {
     if (!formData.nombre) {
       setEnrollError("Primero ingresa el nombre del usuario.");
       return;
@@ -138,13 +140,13 @@ export default function SettingsPage() {
 
     try {
       const { fecha_registro, plan_id, ...rest } = formData;
-      const userRes = await fetch(`${API_URL}/api/users`, {
+      const memberRes = await fetch(`${API_URL}/api/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...rest, huella_id: parseInt(rest.huella_id) }),
+        body: JSON.stringify({ ...rest, fecha_registro, plan_id: Number(plan_id) }),
       });
 
-      if (!userRes.ok) throw new Error('Error al guardar datos del usuario');
+      if (!memberRes.ok) throw new Error('Error al guardar datos del usuario');
 
       setStatus({ type: 'success', message: '¡Usuario registrado exitosamente en la base de datos!' });
       resetForm();
@@ -163,8 +165,8 @@ export default function SettingsPage() {
             <Settings size={14} className="fill-cyan-400" />
             System Administration
           </div>
-          <h2 className="text-4xl font-black text-white tracking-tight">Registro Maestro</h2>
-          <p className="text-slate-400 mt-2 font-medium">Configura dispositivos y registra nueva biometría</p>
+          <h2 className="text-4xl font-black text-white tracking-tight">Administración Central</h2>
+          <p className="text-slate-400 mt-2 font-medium">Configura dispositivos y gestiona el registro maestro</p>
         </div>
       </div>
 
@@ -300,6 +302,7 @@ export default function SettingsPage() {
                 )}
               </div>
 
+              {/* Botón Guardar */}
               <div className="mt-6">
                 <button
                   onClick={handleSave}
@@ -338,6 +341,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="xl:col-span-2 space-y-8">
+          {/* Estado del Terminal */}
           <div className="bg-[#0d121b] border border-white/5 rounded-[3rem] p-10 relative overflow-hidden">
             <Terminal className="absolute -right-4 -bottom-4 text-white/5" size={150} />
             <h3 className="text-white font-black mb-8 flex items-center gap-3">
@@ -368,8 +372,193 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+
+          {/* Data Retention Section */}
+          <DataRetentionPanel />
         </div>
       </div>
     </div>
   );
+}
+
+function DataRetentionPanel() {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [action, setAction] = useState<'idle' | 'exporting' | 'deleting' | 'done'>('idle');
+  const [retentionType, setRetentionType] = useState<'15d' | 'monthly'>('15d');
+  const [exportChoice, setExportChoice] = useState<'drive' | 'local' | null>(null);
+
+  const getOldestDate = (): Date => {
+    const now = new Date();
+    if (retentionType === '15d') {
+      now.setDate(now.getDate() - 15);
+    } else {
+      now.setMonth(now.getMonth() - 1);
+    }
+    return now;
+  };
+
+  const handleExportAndCleanup = async (choice: 'drive' | 'local') => {
+    setExportChoice(choice);
+    setAction('exporting');
+
+    try {
+      const oldest = getOldestDate();
+      const res = await fetch(`${API_URL}/api/accesses/export?before=${oldest.toISOString()}`);
+      const data = await res.json();
+
+      if (data.accesses && data.accesses.length > 0) {
+        const csv = dataToCSV(data.accesses);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+
+        if (choice === 'local') {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `accesos_${retentionType}_${new Date().toISOString().split('T')[0]}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } else {
+          const linkRes = await fetch(`${API_URL}/api/accesses/upload-drive`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ csv, filename: `accesos_${retentionType}_${new Date().toISOString().split('T')[0]}.csv` }),
+          });
+          const linkData = await linkRes.json();
+          if (linkData.url) {
+            window.open(linkData.url, '_blank');
+          }
+        }
+      }
+
+      await fetch(`${API_URL}/api/accesses/cleanup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ before: oldest.toISOString() }),
+      });
+
+      setAction('done');
+      setTimeout(() => { setShowConfirm(false); setAction('idle'); setExportChoice(null); }, 2000);
+    } catch (err) {
+      console.error(err);
+      setAction('idle');
+    }
+  };
+
+  const handleDeleteWithoutBackup = async () => {
+    setAction('deleting');
+    try {
+      const oldest = getOldestDate();
+      await fetch(`${API_URL}/api/accesses/cleanup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ before: oldest.toISOString() }),
+      });
+      setAction('done');
+      setTimeout(() => { setShowConfirm(false); setAction('idle'); }, 2000);
+    } catch (err) {
+      console.error(err);
+      setAction('idle');
+    }
+  };
+
+  return (
+    <div className="bg-[#0d121b] border border-white/5 rounded-[3rem] p-10 relative overflow-hidden">
+      <Calendar className="absolute -right-4 -bottom-4 text-white/5" size={150} />
+      <h3 className="text-white font-black mb-2 flex items-center gap-3">
+        <Download size={18} className="text-indigo-400" />
+        Retención de Datos
+      </h3>
+      <p className="text-slate-500 text-xs font-medium mb-6">Limpieza automática de accesos antiguos</p>
+
+      <div className="flex gap-3 mb-6">
+        <button
+          onClick={() => setRetentionType('15d')}
+          className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+            retentionType === '15d' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-white/5 text-slate-500 border border-white/5'
+          }`}
+        >
+          15 Días
+        </button>
+        <button
+          onClick={() => setRetentionType('monthly')}
+          className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+            retentionType === 'monthly' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-white/5 text-slate-500 border border-white/5'
+          }`}
+        >
+          Mensual
+        </button>
+      </div>
+
+      {!showConfirm ? (
+        <button
+          onClick={() => setShowConfirm(true)}
+          className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl font-black text-white text-sm flex items-center justify-center gap-3 shadow-lg shadow-indigo-500/20 hover:scale-[1.01] transition-all"
+        >
+          <Trash2 size={16} />
+          Limpiar Accesos Antiguos
+        </button>
+      ) : (
+        <div className="space-y-3 animate-in">
+          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 px-4 py-3 rounded-xl text-xs font-medium flex items-start gap-2">
+            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+            <span>Hay registros de acceso anteriores al período seleccionado. ¿Deseas descargarlos antes de eliminar?</span>
+          </div>
+
+          {action === 'done' ? (
+            <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-4 rounded-xl text-sm font-bold flex items-center gap-3">
+              <CheckCircle2 size={18} />
+              Listo
+            </div>
+          ) : action === 'exporting' || action === 'deleting' ? (
+            <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-4 py-4 rounded-xl text-sm font-bold flex items-center gap-3">
+              <Loader2 size={18} className="animate-spin" />
+              {action === 'exporting' ? 'Exportando...' : 'Eliminando...'}
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleExportAndCleanup('local')}
+                className="flex-1 py-3 bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-cyan-500/30 transition-all"
+              >
+                Descargar (PC)
+              </button>
+              <button
+                onClick={() => handleExportAndCleanup('drive')}
+                className="flex-1 py-3 bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-500/30 transition-all"
+              >
+                Subir a Drive
+              </button>
+              <button
+                onClick={handleDeleteWithoutBackup}
+                className="flex-1 py-3 bg-rose-500/20 border border-rose-500/30 text-rose-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-rose-500/30 transition-all"
+              >
+                No, Borrar
+              </button>
+            </div>
+          )}
+
+          <button
+            onClick={() => { setShowConfirm(false); setAction('idle'); }}
+            className="w-full text-xs text-slate-500 hover:text-white transition-colors underline"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function dataToCSV(accesses: any[]): string {
+  const headers = ['ID', 'Miembro', 'Cédula', 'Resultado', 'Confianza', 'Dispositivo', 'Fecha'];
+  const rows = accesses.map((a: any) => [
+    a.id,
+    a.miembro?.nombre || 'Desconocido',
+    a.miembro?.cedula || '',
+    a.resultado,
+    a.confianza,
+    a.dispositivo_id,
+    new Date(a.timestamp).toLocaleString('es-CO'),
+  ]);
+  return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
 }
