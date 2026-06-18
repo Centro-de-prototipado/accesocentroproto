@@ -19,6 +19,7 @@ const io = new Server(server, {
   transports: ['websocket', 'polling']
 });
 const prisma = new PrismaClient();
+const dbSync = require('./db_sync');
 
 // Estado temporal en memoria para enrolamiento (para soportar HTTP Polling)
 let currentEnrollStatus = {
@@ -418,6 +419,22 @@ app.post('/api/devices/:id/open', authenticateAdmin, (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const { filter, hour } = req.query;
+
+    // Si no tenemos DATABASE_URL configurada en Vercel, usamos el cliente fallback HTTP de Supabase
+    if (!process.env.DATABASE_URL) {
+      console.log("⚠️ DATABASE_URL no encontrada en Vercel. Usando REST API fallback para Supabase...");
+      const fallbackUsers = await dbSync.fetchUsersFallback();
+      if (fallbackUsers) {
+        let filtered = fallbackUsers;
+        if (filter === 'active') {
+          filtered = filtered.filter(u => u.estado === 'activo');
+        } else if (filter === 'inactive') {
+          filtered = filtered.filter(u => u.estado === 'inactivo');
+        }
+        return res.json(filtered);
+      }
+    }
+
     let where = {};
     const now = new Date();
 
@@ -509,6 +526,21 @@ app.post('/api/users', authenticateAdmin, async (req, res) => {
   try {
     const { cedula, nombre, telefono, huella_id } = req.body;
 
+    if (!process.env.DATABASE_URL) {
+      console.log("⚠️ DATABASE_URL no encontrada. Registrando usuario via REST fallback...");
+      const nuevoUsuario = await dbSync.createUserFallback({
+        cedula,
+        nombre,
+        telefono,
+        huella_id: parseInt(huella_id),
+        estado: 'activo',
+        rol: 'empleado',
+        fecha_registro: new Date().toISOString()
+      });
+      currentEnrollStatus = { estado: "Inactivo", lectura: 0, resultado: null, huella_id: null, timestamp: Date.now() };
+      return res.json({ success: true, user: nuevoUsuario });
+    }
+
     const nuevoUsuario = await prisma.usuario.create({
       data: {
         cedula,
@@ -543,12 +575,17 @@ app.post('/api/devices/:id/enroll', authenticateAdmin, (req, res) => {
   res.json({ success: true, message: 'Comando enrolar enviado.' });
 });
 
-
-
 // Eliminar usuario (envía comando MQTT al sensor, espera confirmación)
 app.delete('/api/users/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (!process.env.DATABASE_URL) {
+      console.log("⚠️ DATABASE_URL no encontrada. Eliminando usuario via REST fallback...");
+      await dbSync.deleteUserFallback(parseInt(id));
+      return res.json({ success: true, message: 'Usuario eliminado de la base de datos (REST fallback)' });
+    }
+
     const user = await prisma.usuario.findUnique({ where: { id: parseInt(id) } });
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
