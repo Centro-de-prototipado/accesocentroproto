@@ -34,13 +34,17 @@ export default function Dashboard() {
   const fetchStats = () =>
     fetch(`${API_URL}/api/stats`)
       .then(r => r.json())
-      .then(data => setStats(data))
+      .then(data => {
+        if (data && !data.error) {
+          setStats(data);
+        }
+      })
       .catch(err => console.error('Stats error:', err));
 
   const fetchTodayAccesses = () =>
     fetch(`${API_URL}/api/accesses/today`)
       .then(r => r.json())
-      .then(data => setEvents(data))
+      .then(data => setEvents(Array.isArray(data) ? data : []))
       .catch(err => console.error('Accesses error:', err));
 
   useEffect(() => {
