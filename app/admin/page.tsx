@@ -36,11 +36,17 @@ export default function AdminPage() {
   };
 
   const fetchNextId = () => {
-    fetch(`${API_URL}/api/next-huella-id`)
+    const token = localStorage.getItem("adminToken");
+    fetch(`${API_URL}/api/next-huella-id`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    })
       .then(r => r.json())
       .then(data => {
-        setFormData(f => ({ ...f, huella_id: data.huella_id.toString() }));
-      });
+        if (data && data.huella_id !== undefined && data.huella_id !== null) {
+          setFormData(f => ({ ...f, huella_id: data.huella_id.toString() }));
+        }
+      })
+      .catch(err => console.error("Error fetching next ID:", err));
   };
 
   useEffect(() => { fetchNextId(); }, []);
